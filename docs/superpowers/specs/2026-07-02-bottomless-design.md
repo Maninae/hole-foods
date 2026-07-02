@@ -18,7 +18,7 @@ Art: **emoji rendered to cached offscreen canvases** (crisp, colorful, huge vari
 
 - Hole steers toward pointer (mouse or touch) or WASD/arrow direction; velocity eases in.
 - An object **fits** if `obj.r ≤ hole.r × 0.95`. Fitting objects within the pull radius get vacuumed toward the hole; when their center is deep enough inside, they **tip in**: 0.45 s fall animation (shrink, spin, slide to center, clipped to the pit), then score + particles + pop sound pitched by size.
-- **Growth**: score feeds XP; `radius = 22 × (1 + xp/140)^0.30`. Levels are exponential XP thresholds (feedback only — burst ring, jingle, "LEVEL N!" floater; radius itself is continuous).
+- **Growth**: the hole's area accumulates a fraction of each swallowed object's area — `r = √(r0² + k·Σs²)`, k ≈ 0.35. This is scale-free: at any size, ~3 objects of your own scale grow you ~50 % in area, so pacing never degrades across biome cycles. Points are `round(s²/8)` (also scale-free). Levels are radius milestones `r0 × 1.22^(n−1)` (feedback only — burst ring, jingle, "LEVEL N!" floater).
 - **Combo**: swallows ≤ 1.8 s apart build a streak; multiplier ×2/×3/×4/×5 at streaks 4/8/12/16.
 - **Camera** zooms out as you grow (`zoom ≈ 1.15 × (22/r)^0.8`, clamped) — you feel bigger *and* see more. Screen shake scales with swallowed size.
 
