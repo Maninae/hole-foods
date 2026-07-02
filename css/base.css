@@ -1,0 +1,66 @@
+/* Design tokens + page scaffold. The game paints the canvas; everything
+   here is chrome around it. */
+
+:root {
+  --cream: #fff8ec;
+  --gold: #ffd166;
+  --gold-deep: #ff9f43;
+  --ink: #1c1030;
+  --panel: rgba(30, 15, 56, 0.66);
+  --panel-line: rgba(255, 255, 255, 0.14);
+  --font: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN",
+          Quicksand, Comfortaa, system-ui, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font);
+  background: #150a2b;
+  color: var(--cream);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* Soft vignette so the world edges melt away. */
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    transparent 55%, rgba(18, 8, 38, 0.18) 82%, rgba(18, 8, 38, 0.42) 100%);
+}
+
+.hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+button {
+  font-family: var(--font);
+  border: none;
+  cursor: pointer;
+  color: var(--cream);
+  background: none;
+}

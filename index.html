@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Bottomless — eat everything, grow forever</title>
+  <meta name="description" content="You are a hole. Swallow berries, cakes, toys, cars and whole city blocks in an endless, procedurally generated world. The further you roam, the bigger everything gets.">
+  <meta name="theme-color" content="#150a2b">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='52' r='38' fill='%23150a2b' stroke='%23fff3e0' stroke-width='9'/></svg>">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/ui.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="vignette"></div>
+
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <div id="level-badge">1</div>
+      <div class="level-meta">
+        <div id="level-bar"><div id="level-fill"></div></div>
+        <div id="size-label">44 cm</div>
+      </div>
+    </div>
+    <div id="score">0</div>
+    <div class="hud-right">
+      <button id="btn-mute" aria-label="Toggle sound">🔊</button>
+      <button id="btn-pause" aria-label="Pause">⏸</button>
+    </div>
+    <div id="combo" class="hidden">×2</div>
+    <div id="toast" class="hidden"></div>
+  </div>
+
+  <div id="start" class="overlay">
+    <div class="panel">
+      <div class="title-hole" aria-hidden="true"></div>
+      <h1>BOTTOMLESS</h1>
+      <p class="tagline">You are a hole. Everything fits, eventually.</p>
+      <p id="best-line">Eat everything. Grow forever.</p>
+      <button id="btn-play" class="big-btn">Play</button>
+      <p class="hints">🖱️ steer with your mouse&ensp;·&ensp;⌨️ WASD / arrows&ensp;·&ensp;👆 drag on touch</p>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="panel">
+      <h2>Paused</h2>
+      <button id="btn-resume" class="big-btn">Resume</button>
+      <div class="btn-row">
+        <button id="btn-restart" class="mid-btn">↺ Restart run</button>
+        <button id="btn-sound" class="mid-btn">🔊 Sound: on</button>
+      </div>
+      <p class="hints">Esc / P pauses&ensp;·&ensp;roam outward — everything gets bigger</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
