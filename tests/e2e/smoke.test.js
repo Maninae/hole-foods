@@ -116,11 +116,11 @@ test('mute toggle persists across reload', async () => {
   await page.waitForLoadState('networkidle');
   await page.click('#btn-play');
   await page.click('#btn-mute');
-  assert.equal(await page.evaluate(() => localStorage.getItem('bottomless.muted')), '1');
+  assert.equal(await page.evaluate(() => localStorage.getItem('holefoods.muted')), '1');
   await page.reload();
   await page.waitForLoadState('networkidle');
   assert.equal(await page.textContent('#btn-mute'), '🔇');
-  await page.evaluate(() => localStorage.removeItem('bottomless.muted'));
+  await page.evaluate(() => localStorage.removeItem('holefoods.muted'));
   await page.close();
 });
 
@@ -133,7 +133,7 @@ test('best run is recorded after pausing', async () => {
   // Cheat a little: feed the engine directly (still exercises persistence).
   await page.evaluate(() => { window.__game.hole.score = 4321; });
   await page.keyboard.press('KeyP');
-  const best = await page.evaluate(() => JSON.parse(localStorage.getItem('bottomless.best')));
+  const best = await page.evaluate(() => JSON.parse(localStorage.getItem('holefoods.best')));
   assert.equal(best.score, 4321);
   await page.close();
 });

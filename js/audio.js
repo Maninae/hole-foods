@@ -2,7 +2,7 @@
 // swallows, combo ticks, a level-up arpeggio, and a soft ambient pad.
 // Zero audio assets. Mute persists in localStorage.
 
-const MUTE_KEY = 'bottomless.muted';
+const MUTE_KEY = 'holefoods.muted';
 
 let actx = null;
 let master = null;

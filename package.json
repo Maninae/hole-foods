@@ -1,5 +1,5 @@
 {
-  "name": "bottomless",
+  "name": "hole-foods",
   "private": true,
   "description": "Dev tooling only — the game itself is static vanilla JS with no build step.",
   "type": "module",

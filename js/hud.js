@@ -4,7 +4,7 @@
 import { levelProgress, sizeLabel } from './hole.js';
 import { biomeDisplayName } from './catalog.js';
 
-const BEST_KEY = 'bottomless.best';
+const BEST_KEY = 'holefoods.best';
 
 export function loadBest() {
   try {

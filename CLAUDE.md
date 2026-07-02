@@ -1,4 +1,4 @@
-# CLAUDE.md — Bottomless
+# CLAUDE.md — Hole Foods
 
 Endless single-player hole-swallowing web game (Hole.io genre, cozy/no-fail).
 Static vanilla HTML/CSS/JS, ES modules, no build step, no runtime deps, no
@@ -91,6 +91,6 @@ artifacts in tests/e2e/artifacts/ are gitignored).
 
 ## Design doc
 
-`docs/superpowers/specs/2026-07-02-bottomless-design.md` — approaches
+`docs/superpowers/specs/2026-07-02-hole-foods-design.md` — approaches
 considered, tuning rationale, YAGNI list (no multiplayer, no shops/skins,
 no backend, no mid-run world saves).
