@@ -36,6 +36,23 @@ function spriteFor(emoji, neededPx) {
 // used only to pick a crisp raster bucket.
 export function drawEmoji(ctx, emoji, x, y, r, rot, screenScale) {
   const worldSpan = r * 2.15;               // em-box world size for visual diameter ~2r
+  // Beyond the raster cap, draw the glyph directly — stays crisp at any size
+  // and only a handful of such giants are ever on screen.
+  if (worldSpan * screenScale > 1024) {
+    ctx.font = `${Math.round(worldSpan)}px ${FONT_STACK}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (rot) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.fillText(emoji, 0, worldSpan * 0.04);
+      ctx.restore();
+    } else {
+      ctx.fillText(emoji, x, y + worldSpan * 0.04);
+    }
+    return;
+  }
   const sprite = spriteFor(emoji, worldSpan * screenScale);
   const dw = worldSpan * PAD;
   if (rot) {

@@ -101,8 +101,9 @@
   font-size: clamp(34px, 6vw, 52px);
   font-weight: 900;
   color: var(--gold);
-  -webkit-text-stroke: 2px rgba(28, 16, 48, 0.6);
-  text-shadow: 0 3px 12px rgba(10, 4, 24, 0.5);
+  text-shadow: 0 3px 0 rgba(140, 80, 20, 0.4),
+               0 6px 20px rgba(10, 4, 24, 0.45),
+               0 0 26px rgba(255, 209, 102, 0.5);
   transition: opacity 0.25s;
 }
 
@@ -165,10 +166,11 @@
 }
 
 h1 {
-  font-size: clamp(42px, 9vw, 78px);
+  font-size: clamp(32px, 6vw, 52px);
   font-weight: 900;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   line-height: 1.05;
+  white-space: nowrap;
   background: linear-gradient(180deg, var(--cream) 35%, var(--gold));
   -webkit-background-clip: text;
   background-clip: text;

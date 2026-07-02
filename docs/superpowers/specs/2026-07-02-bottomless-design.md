@@ -25,7 +25,7 @@ Art: **emoji rendered to cached offscreen canvases** (crisp, colorful, huge vari
 ## Procedural world
 
 - Infinite plane in **480-unit chunks**, generated deterministically from `hash(seed, cx, cy)` — same seed → same world. `?seed=` URL param for reproducible runs (e2e uses this).
-- **Biome bands** by distance from origin (~2 200 units per band): Berry Meadow → Orchard Grove → Sugar Bakery → Toybox Town → Picnic Plaza → Downtown, then the cycle repeats as "II", "III", … with sizes ×~1.45 per band and points scaling up — endless progression.
+- **Biome bands** by distance from origin (~2 200 units per band): Berry Meadow → Orchard Grove → Sugar Bakery → Toybox Town → Funfair Boardwalk → Downtown, then the cycle repeats as "II", "III", … with sizes ×6 per full cycle (item tables already ramp within a cycle; ×6 keeps the Downtown→Meadow-II boundary continuous — ×12 was tried and looked absurd) — endless progression. Points derive from placed area (`s²/8`), so they scale automatically.
 - Each chunk rolls 0–2 **pattern clusters** (ring, double ring, grid, spiral, arc, blob — the decorative arrangements from the reference art) of one item type, plus scattered singles and non-collectible ground decals. Density drops as item size grows.
 - **Eaten objects stay eaten**: per-chunk `Set` of consumed indices, kept for the whole run. Chunks far from camera unload (regenerate identically on return).
 - Ground: per-chunk flat color lerped smoothly across band boundaries + subtle per-biome pattern tile.

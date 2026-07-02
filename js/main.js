@@ -52,12 +52,16 @@ function handleEvents(events) {
     if (ev.type === 'swallow') {
       const n = Math.round(Math.min(18, 6 + (ev.r / hole.r) * 14));
       suckBurst(fx, Math.random, hole.x, hole.y, hole.r * 0.95, ev.hue, n);
-      floatText(fx, hole.x, hole.y - hole.r * 1.4, `+${ev.points.toLocaleString()}`, {
-        size: hole.r * 0.5,
-        hue: ev.mult > 1 ? 43 : 0,
-        sat: ev.mult > 1 ? 95 : 0,
-        up: hole.r * 1.1,
-      });
+      // Cap point floaters so combo frenzies don't wall the screen with text.
+      if (fx.floats.length < 7 || ev.big) {
+        const jx = (Math.random() - 0.5) * hole.r * 1.6; // spread stacked floaters
+        floatText(fx, hole.x + jx, hole.y - hole.r * 1.4, `+${ev.points.toLocaleString()}`, {
+          size: hole.r * 0.5,
+          hue: ev.mult > 1 ? 43 : 0,
+          sat: ev.mult > 1 ? 95 : 0,
+          up: hole.r * 1.1,
+        });
+      }
       if (ev.big) {
         audio.gulp();
         if (!reducedMotion) shake(cam, Math.min(hole.r * 0.3, ev.r * 0.22));

@@ -63,20 +63,29 @@ function tileFor(biomeKey) {
 }
 
 // Paint the visible ground. ctx is already in world transform.
+// Bands are radial, so a single radial gradient centered on the world origin
+// gives perfectly smooth biome transitions — no per-chunk color stepping.
 export function drawGround(ctx, world, x0, y0, x1, y1) {
-  // Base fill: farthest-band color underneath everything visible.
-  ctx.fillStyle = groundColorAt(Math.hypot((x0 + x1) / 2, (y0 + y1) / 2));
+  const nearX = Math.min(Math.max(x0, 0), x1); // rect point nearest the origin
+  const nearY = Math.min(Math.max(y0, 0), y1);
+  const dMin = Math.hypot(nearX, nearY);
+  const dMax = Math.max(
+    Math.hypot(x0, y0), Math.hypot(x1, y0),
+    Math.hypot(x0, y1), Math.hypot(x1, y1),
+  );
+  const grad = ctx.createRadialGradient(0, 0, dMin, 0, 0, dMax);
+  const steps = 28;
+  for (let i = 0; i <= steps; i++) {
+    grad.addColorStop(i / steps, groundColorAt(dMin + (dMax - dMin) * (i / steps)));
+  }
+  ctx.fillStyle = grad;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
 
+  // Subtle per-biome dot texture, chunk by chunk (seams invisible at 4% ink).
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     const cx0 = chunk.cx * C;
     const cy0 = chunk.cy * C;
     if (cx0 > x1 || cy0 > y1 || cx0 + C < x0 || cy0 + C < y0) return;
-    const dist = Math.hypot(cx0 + C / 2, cy0 + C / 2);
-    ctx.fillStyle = groundColorAt(dist);
-    // Tiny overlap hides antialias seams between chunk rects.
-    ctx.fillRect(cx0 - 0.5, cy0 - 0.5, C + 1, C + 1);
-
     const tile = tileFor(biomeForBand(chunk.band).key);
     if (!tile.pattern) {
       tile.pattern = ctx.createPattern(tile.canvas, 'repeat');

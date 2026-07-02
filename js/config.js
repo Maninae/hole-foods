@@ -38,5 +38,5 @@ export const CONFIG = {
 
   // Biome cycling ("objects level up as you explore")
   BANDS_PER_CYCLE: 6,
-  CYCLE_SIZE_MULT: 12,    // object size multiplier per full biome cycle
+  CYCLE_SIZE_MULT: 6,     // object size multiplier per full biome cycle
 };

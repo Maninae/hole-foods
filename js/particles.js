@@ -110,8 +110,8 @@ export function drawFx(ctx, fx, zoom) {
     const px = Math.max(f.size, 15 / zoom);
     ctx.globalAlpha = k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.55) / 0.45);
     ctx.font = `800 ${px}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
-    ctx.lineWidth = px * 0.16;
-    ctx.strokeStyle = 'rgba(30, 20, 40, 0.55)';
+    ctx.lineWidth = px * 0.1;
+    ctx.strokeStyle = 'rgba(30, 20, 40, 0.4)';
     ctx.strokeText(f.text, f.x, f.y - rise);
     ctx.fillStyle = f.sat > 0 ? `hsl(${f.hue} ${f.sat}% 72%)` : '#fff';
     ctx.fillText(f.text, f.x, f.y - rise);
