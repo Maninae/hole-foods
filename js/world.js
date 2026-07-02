@@ -169,6 +169,22 @@ export function forEachObjectNear(world, x, y, radius, fn) {
   }
 }
 
+// Iterate loaded chunks overlapping the rect, padded so objects with
+// cross-chunk footprints are included. For the renderer.
+export function forEachChunkInRect(world, x0, y0, x1, y1, fn) {
+  const pad = padChunksAt(world, (x0 + x1) / 2, (y0 + y1) / 2);
+  const cx0 = Math.floor(x0 / C) - pad;
+  const cx1 = Math.floor(x1 / C) + pad;
+  const cy0 = Math.floor(y0 / C) - pad;
+  const cy1 = Math.floor(y1 / C) + pad;
+  for (let cy = cy0; cy <= cy1; cy++) {
+    for (let cx = cx0; cx <= cx1; cx++) {
+      const chunk = world.chunks.get(chunkKey(cx, cy));
+      if (chunk) fn(chunk);
+    }
+  }
+}
+
 // Permanently consume an object (falling finalization). Safe if the chunk
 // has been unloaded mid-fall: the eaten set is what persists.
 export function markEaten(world, obj) {
