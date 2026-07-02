@@ -68,6 +68,17 @@ Engine modules (`rng`, `catalog`, `patterns`, `world`, `hole`, `swallow`, `camer
 - `npm test` — `node --test tests/unit/*.test.js`: rng determinism; catalog integrity; pattern geometry; world determinism + eaten persistence + banding; growth monotonicity + level math; swallow fit/pull/combo rules. TDD (red→green) for all engine modules.
 - `npm run test:e2e` — Playwright (pinned 1.58.2, same as packet-run): page boots with zero console errors; PLAY starts; driving toward a seeded object swallows it (score > 0, radius grows); mute persists; screenshots at desktop + iPhone viewports reviewed before ship.
 
+## Amendment (2026-07-02, post-playtest): the fractal invariant
+
+Owen's playtest at ~level 28 exposed the scale break: `ZOOM_MIN 0.26` let the hole outgrow the screen, so swallow particles walled the view and the vacuum reached past the visible edge. Fix shipped the same day — **the world is now self-similar at every scale**:
+
+- Biome bands widen geometrically (×`CYCLE_SIZE_MULT` per cycle) instead of linearly, so a band takes about as long to cross at any size.
+- Chunks come in per-cycle levels (`chunk size = CHUNK × 6^cycle`); grids whose chunks would span < 1/44th of the view are skipped (LOD), keeping loaded chunks bounded (< 1800) at any zoom.
+- Zoom is effectively unclamped (`ZOOM_MIN 0.002`); with `SPEED_EXP 0.85` vs `ZOOM_EXP 0.8`, on-screen hole size (~150–220 px) and speed stay near-constant forever.
+- Particle pool capped at 280 with a per-swallow effects budget; scores format compact ("56.0M") past a million.
+
+Covered by `tests/unit/fractal.test.js` (band geometry, level ownership, bounded chunk counts, LOD skipping, cross-boundary queries).
+
 ## Out of scope (YAGNI)
 
 Multiplayer/AI holes, timers/quests/skins/shops, app-store packaging, backend anything, save-mid-run world state (only best-run + mute persist).

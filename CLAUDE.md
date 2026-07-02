@@ -16,8 +16,9 @@ js/rng.js            xmur3+mulberry32 seeded PRNG; chunkRng(seed,cx,cy,salt)
 js/catalog.js        6 biomes × item tables (emoji, base radius, weight, hue),
                      band/cycle math, pointsFor
 js/patterns.js       cluster layouts: ring/doubleRing/grid/spiral/arc/blob (pure)
-js/world.js          chunk lifecycle, deterministic generation, eaten-set
-                     persistence, padded spatial queries
+js/world.js          FRACTAL chunk lifecycle: chunk size scales x6 per biome
+                     cycle (leveled grids), deterministic generation, eaten-set
+                     persistence, LOD level skipping, spatial queries
 js/hole.js           player state: easing movement, area-accumulation growth,
                      radius-milestone levels, sizeLabel
 js/swallow.js        vacuum pull, tip-in fall state machine, combo + scoring;
@@ -45,15 +46,27 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 
 ## Invariants (break these and the world breaks)
 
-- **Chunk generation must be deterministic** from `(seed, cx, cy)`. Consume
-  the chunk RNG identically on every path — `tryPlace` consumes an id index
-  even when placement is rejected, so ids stay stable.
+- **THE FRACTAL INVARIANT** (tests/unit/fractal.test.js): the game must look
+  and play identically at every scale. Biome bands widen ×CYCLE_SIZE_MULT per
+  cycle (`bandRange`/`bandIndex` in catalog.js are geometric), chunk size
+  scales the same way (`chunkSizeAt(level)`), zoom is effectively unclamped,
+  and SPEED/ZOOM exponents keep on-screen speed and hole size near-constant.
+  Never reintroduce a meaningful ZOOM_MIN or fixed-size-only chunks — that's
+  the bug where the hole filled the screen and particles walled the view.
+- **Chunk generation must be deterministic** from `(seed, level, cx, cy)`.
+  Consume the chunk RNG identically on every path — `tryPlace` consumes an id
+  index even when placement is rejected, so ids stay stable.
+- **Level ownership + LOD:** a grid cell exists only at the level matching
+  its center's cycle (`cellOwned`); queries visit levels [L−1..L+1] but skip
+  any level whose chunks span < 1/44th of the view (`levelsFor`) — that keeps
+  loaded chunks bounded (<1800) at any zoom. Render also skips objects under
+  1 screen px. Thin gap/overlap rings at cycle boundaries are expected and
+  cosmetically invisible.
 - **Eaten persistence:** `world.eaten` (Map chunkKey→Set idx) outlives chunk
   unload; regenerated chunks filter against it. Never store eaten state on the
   chunk itself.
-- **Padded queries:** objects can sit far outside their owning chunk's rect
-  (cluster extents ≤ ~900 × cycle-size-mult world units). `padChunksAt` sizes
-  the search window; both `forEachObjectNear` and `forEachChunkInRect` use it.
+- **Padded queries:** objects can sit outside their owning chunk's rect;
+  PAD=3 chunks (in each level's own units) always covers cluster extents.
 - **1 world unit = 1 cm** for the HUD size label. Hole starts r=22 (44 cm).
 - Growth is scale-free: `r' = √(r² + 0.35·s²)`; points = `s²/8`. If you change
   one, the pacing tests will tell you.
@@ -61,7 +74,7 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ## Testing
 
 ```
-npm test           # 46 unit tests (node --test tests/unit/*.test.js)
+npm test           # 53 unit tests (node --test tests/unit/*.test.js)
 npm run test:e2e   # 4 Playwright tests: real steering → swallow → growth,
                    # pause/mute/best persistence, mobile overflow (iPhone 13)
 ```
@@ -82,8 +95,9 @@ artifacts in tests/e2e/artifacts/ are gitignored).
 - The ground must NEVER be painted per-chunk with flat colors — that reads as
   a checkerboard. It's one radial gradient (origin-centered) + dot tiles.
 - Monochrome emoji (⚽🎲🎳) are legit color-font glyphs; don't "fix" them.
-- Headless software rendering: ~76fps early game, ~31fps at the worst-case
-  cycle boundary — GPU browsers run 60fps. Don't panic at headless numbers.
+- Headless software rendering: ~76fps early game, ~25fps two cycles deep —
+  GPU browsers run 60fps. Don't panic at headless numbers.
+- Scores go compact past 1M (`fmtNum`: "56.0M") in HUD and floaters.
 - Score floaters are capped (7 live) so ×5 combo frenzies don't wall the
   screen with text.
 - launchd/daemon rules and heavy-asset policy: see the user-level CLAUDE.md
