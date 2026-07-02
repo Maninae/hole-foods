@@ -6,7 +6,7 @@ import {
 } from '../../js/world.js';
 
 function snapshotChunk(world, cx, cy) {
-  const chunk = world.chunks.get(chunkKey(cx, cy));
+  const chunk = world.chunks.get(chunkKey(0, cx, cy));
   assert.ok(chunk, `chunk ${cx},${cy} not generated`);
   return chunk.objects.map((o) => ({ id: o.id, x: o.x, y: o.y, r: o.r, e: o.e }));
 }
@@ -62,12 +62,12 @@ test('eaten objects stay eaten across unload and regeneration', () => {
   ensureChunksAround(w, 1200, 1200, 800, 600);
   const before = snapshotChunk(w, 2, 2);
   assert.ok(before.length > 0, 'need a non-empty chunk for this test');
-  const victim = w.chunks.get(chunkKey(2, 2)).objects[0];
+  const victim = w.chunks.get(chunkKey(0, 2, 2)).objects[0];
   markEaten(w, victim);
 
   // Simulate wandering far away (chunk unloads), then coming back.
   ensureChunksAround(w, 100000, 100000, 800, 600);
-  assert.ok(!w.chunks.has(chunkKey(2, 2)), 'chunk should have unloaded');
+  assert.ok(!w.chunks.has(chunkKey(0, 2, 2)), 'chunk should have unloaded');
   ensureChunksAround(w, 1200, 1200, 800, 600);
 
   const after = snapshotChunk(w, 2, 2);

@@ -8,7 +8,7 @@ import { createCamera, updateCamera, shake } from './camera.js';
 import { createRenderer, renderScene } from './render.js';
 import { createFx, updateFx, suckBurst, confetti, floatText, ringPulse } from './particles.js';
 import { createInput } from './input.js';
-import { createHud, saveBest } from './hud.js';
+import { createHud, saveBest, fmtNum } from './hud.js';
 import * as audio from './audio.js';
 
 const canvas = document.getElementById('game');
@@ -50,12 +50,15 @@ function handleEvents(events) {
   const { hole, fx, cam } = game;
   for (const ev of events) {
     if (ev.type === 'swallow') {
-      const n = Math.round(Math.min(18, 6 + (ev.r / hole.r) * 14));
-      suckBurst(fx, Math.random, hole.x, hole.y, hole.r * 0.95, ev.hue, n);
+      // Effects budget: past ~200 live particles, skip new bursts entirely.
+      if (fx.parts.length < 200) {
+        const n = Math.round(Math.min(18, 6 + (ev.r / hole.r) * 14));
+        suckBurst(fx, Math.random, hole.x, hole.y, hole.r * 0.95, ev.hue, n);
+      }
       // Cap point floaters so combo frenzies don't wall the screen with text.
       if (fx.floats.length < 7 || ev.big) {
         const jx = (Math.random() - 0.5) * hole.r * 1.6; // spread stacked floaters
-        floatText(fx, hole.x + jx, hole.y - hole.r * 1.4, `+${ev.points.toLocaleString()}`, {
+        floatText(fx, hole.x + jx, hole.y - hole.r * 1.4, `+${fmtNum(ev.points)}`, {
           size: hole.r * 0.5,
           hue: ev.mult > 1 ? 43 : 0,
           sat: ev.mult > 1 ? 95 : 0,

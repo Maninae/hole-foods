@@ -5,6 +5,13 @@ export function createFx() {
   return { parts: [], floats: [], rings: [] };
 }
 
+// Global particle budget — combo frenzies drop the oldest dots instead of
+// walling the screen.
+const MAX_PARTS = 280;
+function trimParts(fx) {
+  if (fx.parts.length > MAX_PARTS) fx.parts.splice(0, fx.parts.length - MAX_PARTS);
+}
+
 // Swallow burst: dots spawn on a ring and spiral INTO the center — reads as
 // the hole slurping. (cx, cy) world center, r spawn radius, hue from the item.
 export function suckBurst(fx, rand, cx, cy, r, hue, n) {
@@ -25,6 +32,7 @@ export function suckBurst(fx, rand, cx, cy, r, hue, n) {
       drag: 0.5,
     });
   }
+  trimParts(fx);
 }
 
 // Level-up confetti: multicolor dots exploding outward.
@@ -44,6 +52,7 @@ export function confetti(fx, rand, cx, cy, r, n) {
       drag: 2.2,
     });
   }
+  trimParts(fx);
 }
 
 export function floatText(fx, x, y, text, { size = 20, hue = 0, sat = 0, up = 60 } = {}) {

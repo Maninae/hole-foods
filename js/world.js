@@ -1,35 +1,55 @@
-// Infinite chunked world: deterministic generation, eaten-object persistence,
-// spatial queries. Chunks regenerate identically from (seed, cx, cy); eaten
-// sets survive chunk unload for the whole run. Pure module: no DOM.
+// Infinite FRACTAL chunked world: chunk size scales with the biome cycle
+// (x CYCLE_SIZE_MULT per cycle), matching how object sizes scale — so the
+// number of loaded chunks and on-screen objects stays bounded at ANY zoom.
+// Chunks generate deterministically from (seed, level, cx, cy); eaten sets
+// survive chunk unload for the whole run. Pure module: no DOM.
 
 import { CONFIG } from './config.js';
 import { chunkRng } from './rng.js';
 import {
-  bandIndex, biomeForBand, sizeMultForBand, pointsFor,
+  bandIndex, biomeForBand, cycleForBand, sizeMultForBand, pointsFor,
 } from './catalog.js';
 import { PATTERN_KEYS, layoutCluster } from './patterns.js';
 
-const C = CONFIG.CHUNK;
-// Largest reach of any object from its owning chunk's rect: cluster extents
-// stay under ~13x a (<=70-unit) item radius, singles under the biggest base
-// radius. Used to pad spatial queries so cross-chunk footprints are found.
-const BASE_EXTENT = 900;
+// Cluster extents stay under ~2x a chunk side at every level (spacing scales
+// with item size, item size scales with the level) — 3 chunks of padding
+// always suffices for cross-chunk footprints.
+const PAD = 3;
 const CLUSTER_MAX_BASE_R = 70;
 
-export function chunkKey(cx, cy) {
-  return `${cx},${cy}`;
+export function chunkSizeAt(level) {
+  return CONFIG.CHUNK * Math.pow(CONFIG.CYCLE_SIZE_MULT, level);
+}
+
+export function bandAt(x, y) {
+  return bandIndex(Math.hypot(x, y));
+}
+
+export function levelAt(x, y) {
+  return cycleForBand(bandAt(x, y));
+}
+
+export function chunkKey(level, cx, cy) {
+  return `${level}:${cx},${cy}`;
+}
+
+// Levels whose chunks matter around a position: the local cycle and its
+// neighbors (boundary regions) — but a level is skipped when its chunks
+// would span less than 1/44th of the view: at that zoom its contents are
+// sub-pixel specks, and generating/iterating them is what melts frames.
+function levelsFor(x, y, spanW) {
+  const L = levelAt(x, y);
+  const candidates = L === 0 ? [0, 1] : [L - 1, L, L + 1];
+  const kept = candidates.filter((lv) => chunkSizeAt(lv) >= spanW / 44);
+  return kept.length ? kept : [L];
 }
 
 export function createWorld(seed) {
   return {
     seed: String(seed),
-    chunks: new Map(),   // key -> { cx, cy, band, objects: [], decals: [] }
+    chunks: new Map(),   // key -> { level, cx, cy, band, objects: [], decals: [] }
     eaten: new Map(),    // key -> Set of object indices, persists across unload
   };
-}
-
-export function bandAt(x, y) {
-  return bandIndex(Math.hypot(x, y));
 }
 
 function placeObject(chunk, rng, item, mult, x, y, idx) {
@@ -41,9 +61,9 @@ function placeObject(chunk, rng, item, mult, x, y, idx) {
     if (Math.hypot(o.x - x, o.y - y) < (o.r + r) * 0.85) return null;
   }
   return {
-    id: `${chunkKey(chunk.cx, chunk.cy)}:${idx}`,
+    id: `${chunkKey(chunk.level, chunk.cx, chunk.cy)}:${idx}`,
     idx,
-    ck: chunkKey(chunk.cx, chunk.cy),
+    ck: chunkKey(chunk.level, chunk.cx, chunk.cy),
     x, y, r,
     e: item.e,
     hue: item.hue,
@@ -55,15 +75,16 @@ function placeObject(chunk, rng, item, mult, x, y, idx) {
   };
 }
 
-function generateChunk(world, cx, cy) {
-  const rng = chunkRng(world.seed, cx, cy);
+function generateChunk(world, level, cx, cy) {
+  const C = chunkSizeAt(level);
+  const rng = chunkRng(world.seed, cx, cy, `L${level}`);
   const x0 = cx * C;
   const y0 = cy * C;
   const centerDist = Math.hypot(x0 + C / 2, y0 + C / 2);
   const band = bandIndex(centerDist);
   const biome = biomeForBand(band);
   const mult = sizeMultForBand(band);
-  const chunk = { cx, cy, band, objects: [], decals: [] };
+  const chunk = { level, cx, cy, band, objects: [], decals: [] };
   let idx = 0;
 
   const tryPlace = (item, x, y) => {
@@ -102,7 +123,7 @@ function generateChunk(world, cx, cy) {
   }
 
   // Non-collectible ground decals.
-  const drng = chunkRng(world.seed, cx, cy, 'decals');
+  const drng = chunkRng(world.seed, cx, cy, `L${level}decals`);
   const nDecals = drng.int(2, 5);
   for (let i = 0; i < nDecals; i++) {
     chunk.decals.push({
@@ -115,74 +136,74 @@ function generateChunk(world, cx, cy) {
   }
 
   // Apply persisted eaten set.
-  const eatenSet = world.eaten.get(chunkKey(cx, cy));
+  const eatenSet = world.eaten.get(chunkKey(level, cx, cy));
   if (eatenSet) chunk.objects = chunk.objects.filter((o) => !eatenSet.has(o.idx));
 
   return chunk;
 }
 
-function padChunksAt(world, x, y) {
-  const mult = sizeMultForBand(bandAt(x, y) + 1);
-  return Math.min(30, Math.ceil((BASE_EXTENT * mult) / C) + 1);
+// A grid cell only "exists" at the level matching its center's cycle —
+// every region of the world is owned by exactly one level.
+function cellOwned(level, cx, cy) {
+  const C = chunkSizeAt(level);
+  return cycleForBand(bandIndex(Math.hypot((cx + 0.5) * C, (cy + 0.5) * C))) === level;
 }
 
-// Generate all chunks covering the padded view rect, and unload far ones.
+// Generate all owned chunks covering the padded view rect; unload far ones.
 export function ensureChunksAround(world, x, y, viewW, viewH) {
-  const pad = padChunksAt(world, x, y);
-  const cx0 = Math.floor((x - viewW / 2) / C) - pad;
-  const cx1 = Math.floor((x + viewW / 2) / C) + pad;
-  const cy0 = Math.floor((y - viewH / 2) / C) - pad;
-  const cy1 = Math.floor((y + viewH / 2) / C) + pad;
-  for (let cy = cy0; cy <= cy1; cy++) {
-    for (let cx = cx0; cx <= cx1; cx++) {
-      const key = chunkKey(cx, cy);
-      if (!world.chunks.has(key)) world.chunks.set(key, generateChunk(world, cx, cy));
+  for (const level of levelsFor(x, y, viewW)) {
+    const C = chunkSizeAt(level);
+    const cx0 = Math.floor((x - viewW / 2) / C) - PAD;
+    const cx1 = Math.floor((x + viewW / 2) / C) + PAD;
+    const cy0 = Math.floor((y - viewH / 2) / C) - PAD;
+    const cy1 = Math.floor((y + viewH / 2) / C) + PAD;
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const key = chunkKey(level, cx, cy);
+        if (world.chunks.has(key) || !cellOwned(level, cx, cy)) continue;
+        world.chunks.set(key, generateChunk(world, level, cx, cy));
+      }
     }
   }
-  // Unload chunks far outside the active window (eaten sets are kept).
-  const ccx = Math.floor(x / C);
-  const ccy = Math.floor(y / C);
-  const keep = Math.max(CONFIG.UNLOAD_CHUNKS, pad + Math.ceil(viewW / 2 / C) + 2);
+  // Unload chunks that left the active window or whose level dropped out of
+  // relevance at this zoom (eaten sets are kept; regeneration is identical).
+  const keptLevels = new Set(levelsFor(x, y, viewW));
   for (const [key, chunk] of world.chunks) {
-    if (Math.abs(chunk.cx - ccx) > keep || Math.abs(chunk.cy - ccy) > keep) {
+    const C = chunkSizeAt(chunk.level);
+    const keep = Math.max(CONFIG.UNLOAD_CHUNKS, PAD + Math.ceil(viewW / 2 / C) + 2);
+    if (!keptLevels.has(chunk.level)
+      || Math.abs(chunk.cx - Math.floor(x / C)) > keep
+      || Math.abs(chunk.cy - Math.floor(y / C)) > keep) {
       world.chunks.delete(key);
+    }
+  }
+}
+
+// Iterate loaded chunks (any nearby level) overlapping the padded rect.
+export function forEachChunkInRect(world, x0, y0, x1, y1, fn) {
+  for (const level of levelsFor((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0)) {
+    const C = chunkSizeAt(level);
+    const gx0 = Math.floor(x0 / C) - PAD;
+    const gx1 = Math.floor(x1 / C) + PAD;
+    const gy0 = Math.floor(y0 / C) - PAD;
+    const gy1 = Math.floor(y1 / C) + PAD;
+    for (let cy = gy0; cy <= gy1; cy++) {
+      for (let cx = gx0; cx <= gx1; cx++) {
+        const chunk = world.chunks.get(chunkKey(level, cx, cy));
+        if (chunk) fn(chunk);
+      }
     }
   }
 }
 
 // Iterate idle objects whose footprint intersects the circle (x, y, radius).
 export function forEachObjectNear(world, x, y, radius, fn) {
-  const pad = padChunksAt(world, x, y);
-  const cx0 = Math.floor((x - radius) / C) - pad;
-  const cx1 = Math.floor((x + radius) / C) + pad;
-  const cy0 = Math.floor((y - radius) / C) - pad;
-  const cy1 = Math.floor((y + radius) / C) + pad;
-  for (let cy = cy0; cy <= cy1; cy++) {
-    for (let cx = cx0; cx <= cx1; cx++) {
-      const chunk = world.chunks.get(chunkKey(cx, cy));
-      if (!chunk) continue;
-      for (const o of chunk.objects) {
-        if (o.state !== 'idle') continue;
-        if (Math.hypot(o.x - x, o.y - y) <= radius + o.r) fn(o);
-      }
+  forEachChunkInRect(world, x - radius, y - radius, x + radius, y + radius, (chunk) => {
+    for (const o of chunk.objects) {
+      if (o.state !== 'idle') continue;
+      if (Math.hypot(o.x - x, o.y - y) <= radius + o.r) fn(o);
     }
-  }
-}
-
-// Iterate loaded chunks overlapping the rect, padded so objects with
-// cross-chunk footprints are included. For the renderer.
-export function forEachChunkInRect(world, x0, y0, x1, y1, fn) {
-  const pad = padChunksAt(world, (x0 + x1) / 2, (y0 + y1) / 2);
-  const cx0 = Math.floor(x0 / C) - pad;
-  const cx1 = Math.floor(x1 / C) + pad;
-  const cy0 = Math.floor(y0 / C) - pad;
-  const cy1 = Math.floor(y1 / C) + pad;
-  for (let cy = cy0; cy <= cy1; cy++) {
-    for (let cx = cx0; cx <= cx1; cx++) {
-      const chunk = world.chunks.get(chunkKey(cx, cy));
-      if (chunk) fn(chunk);
-    }
-  }
+  });
 }
 
 // Permanently consume an object (falling finalization). Safe if the chunk

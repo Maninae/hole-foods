@@ -15,7 +15,8 @@ export const CONFIG = {
   FIT_FACTOR: 0.95,       // object fits if obj.r <= hole.r * FIT_FACTOR
   LEVEL_R_GROWTH: 1.22,   // level n at radius HOLE_R0 * LEVEL_R_GROWTH^(n-1)
   SPEED_BASE: 260,        // world units/sec at starting size
-  SPEED_EXP: 0.6,         // speed scales with (r/r0)^SPEED_EXP
+  SPEED_EXP: 0.85,        // speed ~ (r/r0)^SPEED_EXP — with ZOOM_EXP 0.8 this
+                          // keeps on-screen speed near-constant at every scale
   ACCEL: 7,               // velocity easing rate (1/s)
 
   // Swallowing
@@ -31,7 +32,8 @@ export const CONFIG = {
   // Camera
   ZOOM_BASE: 1.1,
   ZOOM_EXP: 0.8,          // zoom ~ (r0/r)^ZOOM_EXP — grow on screen AND see more
-  ZOOM_MIN: 0.26,
+  ZOOM_MIN: 0.002,        // effectively unclamped — leveled chunks keep the
+                          // per-frame work bounded at any zoom (fractal world)
   ZOOM_MAX: 1.1,
   CAM_EASE: 4.5,          // camera follow easing (1/s)
   ZOOM_EASE: 1.6,         // zoom easing (1/s)

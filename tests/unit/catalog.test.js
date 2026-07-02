@@ -35,11 +35,11 @@ test('every biome has food a fresh-to-the-band hole can eat, and aspirational gi
   }
 });
 
-test('bandIndex maps distance to bands of BAND_WIDTH', () => {
+test('bandIndex maps distance to bands (geometric past cycle 0 — see fractal tests)', () => {
   assert.equal(bandIndex(0), 0);
   assert.equal(bandIndex(CONFIG.BAND_WIDTH - 1), 0);
   assert.equal(bandIndex(CONFIG.BAND_WIDTH), 1);
-  assert.equal(bandIndex(CONFIG.BAND_WIDTH * 7.5), 7);
+  assert.equal(bandIndex(CONFIG.BAND_WIDTH * 5.5), 5);
 });
 
 test('biomes cycle and size multiplier compounds per cycle', () => {

@@ -122,8 +122,36 @@ export const BIOMES = [
   },
 ];
 
+// Bands are GEOMETRIC: cycle k's bands are each CYCLE_SIZE_MULT^k wider than
+// cycle 0's, so the world is self-similar — at any scale, a band takes about
+// as long to cross and the camera frames it the same way (the fractal
+// invariant). Walked iteratively: exact, and cycle counts stay tiny.
 export function bandIndex(dist) {
-  return Math.floor(dist / CONFIG.BAND_WIDTH);
+  const N = CONFIG.BANDS_PER_CYCLE;
+  const M = CONFIG.CYCLE_SIZE_MULT;
+  let start = 0;
+  let width = CONFIG.BAND_WIDTH;
+  let band = 0;
+  while (dist >= start + N * width) {
+    start += N * width;
+    width *= M;
+    band += N;
+  }
+  return band + Math.floor(Math.max(0, dist - start) / width);
+}
+
+// { start, width } of a band in world distance.
+export function bandRange(band) {
+  const N = CONFIG.BANDS_PER_CYCLE;
+  const M = CONFIG.CYCLE_SIZE_MULT;
+  const k = Math.floor(band / N);
+  let start = 0;
+  let width = CONFIG.BAND_WIDTH;
+  for (let i = 0; i < k; i++) {
+    start += N * width;
+    width *= M;
+  }
+  return { start: start + (band - N * k) * width, width };
 }
 
 export function biomeForBand(band) {

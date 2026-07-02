@@ -2,10 +2,12 @@
 // boundaries, plus a subtle per-biome dot-pattern tile. DOM module.
 
 import { CONFIG } from './config.js';
-import { BIOMES, bandIndex, biomeForBand } from './catalog.js';
-import { forEachChunkInRect } from './world.js';
+import { BIOMES, bandIndex, bandRange, biomeForBand } from './catalog.js';
+import { forEachChunkInRect, chunkSizeAt } from './world.js';
 
-const C = CONFIG.CHUNK;
+// Fraction of a band's width used to blend into its neighbors — scales with
+// the band itself, so transitions look identical at every cycle.
+const BLEND_FRAC = CONFIG.BAND_BLEND / CONFIG.BAND_WIDTH;
 
 function hexToRgb(hex) {
   return [
@@ -24,26 +26,28 @@ const RGB = new Map(BIOMES.map((b) => [b.key, hexToRgb(b.ground)]));
 // Blended ground color at a world distance from origin.
 export function groundColorAt(dist) {
   const band = bandIndex(dist);
+  const { start, width } = bandRange(band);
   const cur = RGB.get(biomeForBand(band).key);
-  const edge = (band + 1) * CONFIG.BAND_WIDTH;
-  const into = edge - dist; // distance to the next band's edge
-  if (into < CONFIG.BAND_BLEND) {
+  const blend = width * BLEND_FRAC;
+  const into = start + width - dist; // distance to the next band's edge
+  if (into < blend) {
     const next = RGB.get(biomeForBand(band + 1).key);
-    return mix(cur, next, 0.5 - (into / CONFIG.BAND_BLEND) * 0.5);
+    return mix(cur, next, 0.5 - (into / blend) * 0.5);
   }
-  const prevEdge = band * CONFIG.BAND_WIDTH;
-  const from = dist - prevEdge;
-  if (band > 0 && from < CONFIG.BAND_BLEND) {
+  const from = dist - start;
+  if (band > 0 && from < blend) {
     const prev = RGB.get(biomeForBand(band - 1).key);
-    return mix(cur, prev, 0.5 - (from / CONFIG.BAND_BLEND) * 0.5);
+    return mix(cur, prev, 0.5 - (from / blend) * 0.5);
   }
   return mix(cur, cur, 0);
 }
 
-// One subtle 64px polka-dot tile per biome, tiled in world space.
+// One subtle 64px polka-dot tile per (biome, level), tiled in world space —
+// the pattern scale follows the chunk level so texture reads at every zoom.
 const tiles = new Map();
-function tileFor(biomeKey) {
-  let t = tiles.get(biomeKey);
+function tileFor(biomeKey, level) {
+  const key = `${biomeKey}@${level}`;
+  let t = tiles.get(key);
   if (t) return t;
   const alt = BIOMES.find((b) => b.key === biomeKey).groundAlt;
   const c = document.createElement('canvas');
@@ -57,8 +61,8 @@ function tileFor(biomeKey) {
     ctx.arc(dx, dy, 5, 0, Math.PI * 2);
     ctx.fill();
   }
-  t = { canvas: c, pattern: null };
-  tiles.set(biomeKey, t);
+  t = { canvas: c, pattern: null, level };
+  tiles.set(key, t);
   return t;
 }
 
@@ -83,14 +87,15 @@ export function drawGround(ctx, world, x0, y0, x1, y1) {
 
   // Subtle per-biome dot texture, chunk by chunk (seams invisible at 4% ink).
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
+    const C = chunkSizeAt(chunk.level);
     const cx0 = chunk.cx * C;
     const cy0 = chunk.cy * C;
     if (cx0 > x1 || cy0 > y1 || cx0 + C < x0 || cy0 + C < y0) return;
-    const tile = tileFor(biomeForBand(chunk.band).key);
+    const tile = tileFor(biomeForBand(chunk.band).key, chunk.level);
     if (!tile.pattern) {
       tile.pattern = ctx.createPattern(tile.canvas, 'repeat');
-      // 64px tile spans 130 world units — dots read as texture, not noise.
-      tile.pattern.setTransform(new DOMMatrix().scale(130 / 64));
+      // 64px tile spans 130 world units at level 0; scales with the level.
+      tile.pattern.setTransform(new DOMMatrix().scale((130 / 64) * (C / CONFIG.CHUNK)));
     }
     ctx.fillStyle = tile.pattern;
     ctx.fillRect(cx0, cy0, C, C);

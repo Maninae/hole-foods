@@ -6,6 +6,12 @@ import { biomeDisplayName } from './catalog.js';
 
 const BEST_KEY = 'holefoods.best';
 
+// Big scores read as "56.0M", not a 9-digit wall.
+const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+export function fmtNum(n) {
+  return n < 1e6 ? Math.round(n).toLocaleString() : compact.format(n);
+}
+
 export function loadBest() {
   try {
     const raw = localStorage.getItem(BEST_KEY);
@@ -62,7 +68,7 @@ export function createHud() {
     update(dt, hole) {
       hud.displayScore += (hole.score - hud.displayScore) * Math.min(1, 14 * dt);
       if (hole.score - hud.displayScore < 1) hud.displayScore = hole.score;
-      refs.score.textContent = Math.round(hud.displayScore).toLocaleString();
+      refs.score.textContent = fmtNum(hud.displayScore);
       refs.levelBadge.textContent = hole.level;
       refs.levelFill.style.width = `${(levelProgress(hole.r) * 100).toFixed(1)}%`;
       refs.sizeLabel.textContent = sizeLabel(hole.r);
@@ -97,7 +103,7 @@ export function createHud() {
     showStart() {
       const best = loadBest();
       refs.bestLine.textContent = best
-        ? `Best run: ${best.score.toLocaleString()} pts · ${best.size} wide · Lv ${best.level}`
+        ? `Best run: ${fmtNum(best.score)} pts · ${best.size} wide · Lv ${best.level}`
         : 'Eat everything. Grow forever.';
       refs.start.classList.remove('hidden');
       refs.hud.classList.add('hidden');

@@ -123,11 +123,12 @@ export function renderScene(R, state) {
 
   drawHole(ctx, hole, sw, time, screenScale);
 
-  // Collect visible idle objects, painter-sorted by y.
+  // Collect visible idle objects, painter-sorted by y. Sub-pixel objects
+  // (deep-inner cycles seen from far out) aren't worth a draw call.
   const visible = [];
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     for (const o of chunk.objects) {
-      if (o.state !== 'idle') continue;
+      if (o.state !== 'idle' || o.r * t.scale < 1) continue;
       const m = o.r * 1.4;
       if (o.x < x0 - m || o.x > x1 + m || o.y < y0 - m || o.y > y1 + m) continue;
       visible.push(o);

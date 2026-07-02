@@ -8,7 +8,7 @@ import { createSwallow, swallowUpdate } from '../../js/swallow.js';
 
 function makeObj(idx, x, y, r) {
   return {
-    id: `0,0:${idx}`, idx, ck: '0,0', x, y, r,
+    id: `0:0,0:${idx}`, idx, ck: '0:0,0', x, y, r,
     e: '🍓', hue: 350, up: false, rot: 0,
     points: pointsFor(r), state: 'idle', vx: 0, vy: 0,
   };
@@ -16,7 +16,7 @@ function makeObj(idx, x, y, r) {
 
 function makeFixture(objects) {
   const world = createWorld('swallow-test');
-  world.chunks.set('0,0', { cx: 0, cy: 0, band: 0, objects });
+  world.chunks.set('0:0,0', { level: 0, cx: 0, cy: 0, band: 0, objects });
   return { world, hole: createHole(), sw: createSwallow() };
 }
 
@@ -60,8 +60,8 @@ test('an object over the hole tips in and is consumed after FALL_TIME', () => {
   assert.equal(swallowEvents[0].points, obj.points);
   assert.equal(hole.score, obj.points);
   assert.ok(hole.r > r0, 'hole should grow');
-  assert.ok(world.eaten.get('0,0').has(0), 'eaten set should record it');
-  assert.equal(world.chunks.get('0,0').objects.length, 0);
+  assert.ok(world.eaten.get('0:0,0').has(0), 'eaten set should record it');
+  assert.equal(world.chunks.get('0:0,0').objects.length, 0);
 });
 
 test('fast consecutive swallows build a combo multiplier; a gap resets it', () => {
@@ -106,8 +106,8 @@ test('a fall finishes safely even if the chunk unloaded mid-fall', () => {
   const { world, hole, sw } = makeFixture([obj]);
   swallowUpdate(sw, 1 / 60, 0, world, hole);
   assert.equal(obj.state, 'falling');
-  world.chunks.delete('0,0'); // simulate unload
+  world.chunks.delete('0:0,0'); // simulate unload
   const events = runSeconds(sw, world, hole, CONFIG.FALL_TIME + 0.1, 1 / 60);
   assert.equal(events.filter((e) => e.type === 'swallow').length, 1);
-  assert.ok(world.eaten.get('0,0').has(0), 'eaten set must persist past unload');
+  assert.ok(world.eaten.get('0:0,0').has(0), 'eaten set must persist past unload');
 });
