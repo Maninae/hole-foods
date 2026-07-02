@@ -1,4 +1,4 @@
-# Hole Foods (né Bottomless) — Design Doc (2026-07-02)
+# Hole Foods — Design Doc (2026-07-02)
 
 ## What & why
 

@@ -84,7 +84,7 @@ for e2e and debugging. `?seed=<x>` pins the world.
 
 Method that works here: TDD the engine mechanic → build the presentation →
 e2e → screenshot review at desktop AND mobile viewports (headless Chromium
-renders Apple emoji fine; screenshot scripts live in the session scratchpad,
+renders Apple emoji fine; keep throwaway screenshot scripts outside the repo,
 artifacts in tests/e2e/artifacts/ are gitignored).
 
 ## Gotchas
@@ -100,8 +100,6 @@ artifacts in tests/e2e/artifacts/ are gitignored).
 - Scores go compact past 1M (`fmtNum`: "56.0M") in HUD and floaters.
 - Score floaters are capped (7 live) so ×5 combo frenzies don't wall the
   screen with text.
-- launchd/daemon rules and heavy-asset policy: see the user-level CLAUDE.md
-  (not applicable here — this repo has no assets).
 
 ## Design doc
 

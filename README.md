@@ -9,7 +9,7 @@
 <p align="center">
   <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="dependencies: none" src="https://img.shields.io/badge/runtime_deps-none-brightgreen">
-  <img alt="tests: 57" src="https://img.shields.io/badge/tests-57_passing-brightgreen">
+  <img alt="tests: 53 unit, 4 e2e" src="https://img.shields.io/badge/tests-53_unit,_4_e2e-brightgreen">
 </p>
 
 ---
@@ -26,6 +26,8 @@ An endless hole-swallowing game for the web. Steer a hole across a candy-colored
 Roam far enough and the cycle repeats one size up — your entire first world shrinks to a bullseye behind you:
 
 ![131 m hole, first world visible as rings](media/fractal.png)
+
+<img src="media/mobile.png" align="right" width="230" alt="Mobile gameplay on iPhone">
 
 ## Play
 
