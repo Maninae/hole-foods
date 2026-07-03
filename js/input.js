@@ -42,9 +42,14 @@ export function createInput(canvas) {
     if (e.touches.length === 0) state.touching = false;
   });
 
+  // On macOS, browsers swallow keyup events for other keys while Meta (Cmd)
+  // is held -- so Cmd+Tab can leave a "held" arrow key stuck in the Set even
+  // after focus returns. Clear on any Meta-modified keydown, and skip adding
+  // movement keys while Meta is held so we don't re-poison the Set.
   window.addEventListener('keydown', (e) => {
+    if (e.metaKey) state.keys.clear();
     if (e.code in KEY_DIRS) {
-      state.keys.add(e.code);
+      if (!e.metaKey) state.keys.add(e.code);
       e.preventDefault();
     } else if (e.code === 'Escape' || e.code === 'KeyP') {
       state.onPause?.();
@@ -52,7 +57,15 @@ export function createInput(canvas) {
     state.onAnyGesture?.();
   });
   window.addEventListener('keyup', (e) => state.keys.delete(e.code));
+  // Belt-and-suspenders: clear on every event that means "we're no longer sure
+  // which keys are physically held" -- blur (Cmd+Tab), tab hidden (visibility
+  // change pauses the game and would otherwise resume with a stale key), and
+  // focus regain (fresh start when the user returns).
   window.addEventListener('blur', () => state.keys.clear());
+  window.addEventListener('focus', () => state.keys.clear());
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) state.keys.clear();
+  });
   canvas.addEventListener('mousedown', () => state.onAnyGesture?.());
 
   state.getDirection = (hole, cam, w, h) => {

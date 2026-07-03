@@ -138,6 +138,49 @@ test('best run is recorded after pausing', async () => {
   await page.close();
 });
 
+test('Cmd+Tab does not leave a movement key stuck', async () => {
+  // Regression for a macOS bug: hold ArrowDown, Cmd+Tab away, come back --
+  // the hole would keep moving because Meta swallows the keyup and (depending
+  // on ordering) the blur/visibilitychange clears wouldn't stick. We simulate
+  // the exact event sequence a real Cmd+Tab produces.
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(URL);
+  await page.waitForLoadState('networkidle');
+  await page.click('#btn-play');
+  await page.waitForTimeout(100);
+
+  await page.keyboard.down('ArrowDown');
+  await page.waitForTimeout(200); // let the hole reach real speed
+  const vyHeld = await page.evaluate(() => window.__game.hole.vy);
+  assert.ok(vyHeld > 50, `expected clear downward motion while held, got vy=${vyHeld}`);
+
+  // Cmd+Tab: browser sees Meta keydown, then loses focus, then regains it.
+  // Playwright would emit a synthetic keyup for ArrowDown if we called
+  // keyboard.up -- real macOS does not, because Meta swallows it. So we
+  // never emit that keyup; the fix must clear the Set itself.
+  await page.evaluate(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      code: 'MetaLeft', key: 'Meta', metaKey: true, bubbles: true,
+    }));
+    window.dispatchEvent(new Event('blur'));
+  });
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForTimeout(900);
+
+  const after = await page.evaluate(() => ({
+    vy: window.__game.hole.vy,
+    mode: window.__game.mode,
+  }));
+  assert.equal(after.mode, 'playing');
+  assert.ok(
+    Math.abs(after.vy) < 5,
+    `hole still moving after Cmd+Tab return: vy=${after.vy}`,
+  );
+  await page.close();
+});
+
 test('mobile (iPhone 13): boots clean, no horizontal overflow, play starts', async () => {
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
