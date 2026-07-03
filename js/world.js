@@ -16,6 +16,16 @@ import { PATTERN_KEYS, layoutCluster } from './patterns.js';
 // always suffices for cross-chunk footprints.
 const PAD = 3;
 const CLUSTER_MAX_BASE_R = 70;
+// Chunks are grouped into 3x3 regions that share an oasis-or-desert fate.
+// A region is an oasis with this probability; the rest is sparse desert.
+// Regions inside the starter radius are always oases regardless of the roll.
+const REGION_SIZE = 3;
+const OASIS_PROB = 0.22;
+// Desert chunks' crumbs are drawn from a biome's smallest few items.
+const DESERT_ITEM_TIER = 4;
+// A desert chunk still gets a single full-table surprise this often — a rare
+// giant sighting between oases.
+const DESERT_SURPRISE_PROB = 0.06;
 
 export function chunkSizeAt(level) {
   return CONFIG.CHUNK * Math.pow(CONFIG.CYCLE_SIZE_MULT, level);
@@ -75,6 +85,13 @@ function placeObject(chunk, rng, item, mult, x, y, idx) {
   };
 }
 
+// The biome's smallest-N items (by base radius), used to seed desert crumbs.
+function smallestItems(biome, n) {
+  const sorted = [...biome.items].sort((a, b) => a.r - b.r);
+  const cutoffR = sorted[Math.min(n, sorted.length) - 1].r;
+  return biome.items.filter((it) => it.r <= cutoffR);
+}
+
 function generateChunk(world, level, cx, cy) {
   const C = chunkSizeAt(level);
   const rng = chunkRng(world.seed, cx, cy, `L${level}`);
@@ -93,25 +110,52 @@ function generateChunk(world, level, cx, cy) {
     if (o) chunk.objects.push(o);
   };
 
-  // Pattern clusters (the decorative rings/grids/spirals) — small/mid items only.
-  const clusterItems = biome.items.filter((it) => it.r <= CLUSTER_MAX_BASE_R);
-  const clusterRoll = rng.next();
-  const nClusters = clusterItems.length === 0 ? 0 : clusterRoll < 0.18 ? 0 : clusterRoll < 0.72 ? 1 : 2;
-  for (let ci = 0; ci < nClusters; ci++) {
-    const item = rng.pickWeighted(clusterItems, (it) => it.w);
-    const pattern = rng.pick(PATTERN_KEYS);
-    const cxw = x0 + rng.range(0.2, 0.8) * C;
-    const cyw = y0 + rng.range(0.2, 0.8) * C;
-    for (const p of layoutCluster(rng, pattern, item.r * mult)) {
-      tryPlace(item, cxw + p.x, cyw + p.y);
-    }
-  }
+  // Region-scale oasis roll: 3x3 chunks share a fate, so richness comes in
+  // patches you can find and clear — a lot of food, then a few crumbs
+  // sparsely here and there before the next cluster. Rolled on a separate
+  // RNG stream so it does not disturb the chunk stream's placement pattern.
+  // Chunks inside the starter radius are always oases (a newborn hole must
+  // have food nearby regardless of which region it lands in).
+  const regionRng = chunkRng(
+    world.seed,
+    Math.floor(cx / REGION_SIZE),
+    Math.floor(cy / REGION_SIZE),
+    `L${level}oasis`,
+  );
+  const isOasis = centerDist < CONFIG.STARTER_RADIUS
+    || regionRng.next() < OASIS_PROB;
 
-  // Scattered singles — full item table, so the giants show up here.
-  const nSingles = rng.int(3, 7);
-  for (let i = 0; i < nSingles; i++) {
-    const item = rng.pickWeighted(biome.items, (it) => it.w);
-    tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
+  if (isOasis) {
+    // Rich: several decorative clusters plus a bunch of scattered singles.
+    const clusterItems = biome.items.filter((it) => it.r <= CLUSTER_MAX_BASE_R);
+    const nClusters = clusterItems.length === 0 ? 0 : rng.int(2, 3);
+    for (let ci = 0; ci < nClusters; ci++) {
+      const item = rng.pickWeighted(clusterItems, (it) => it.w);
+      const pattern = rng.pick(PATTERN_KEYS);
+      const cxw = x0 + rng.range(0.2, 0.8) * C;
+      const cyw = y0 + rng.range(0.2, 0.8) * C;
+      for (const p of layoutCluster(rng, pattern, item.r * mult)) {
+        tryPlace(item, cxw + p.x, cyw + p.y);
+      }
+    }
+    const nSingles = rng.int(5, 9);
+    for (let i = 0; i < nSingles; i++) {
+      const item = rng.pickWeighted(biome.items, (it) => it.w);
+      tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
+    }
+  } else {
+    // Desert: a scattering of crumbs from the biome's smallest few items,
+    // with a rare full-table surprise to keep exploration interesting.
+    const crumbItems = smallestItems(biome, DESERT_ITEM_TIER);
+    const nCrumbs = rng.int(0, 2);
+    for (let i = 0; i < nCrumbs; i++) {
+      const item = rng.pickWeighted(crumbItems, (it) => it.w);
+      tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
+    }
+    if (rng.next() < DESERT_SURPRISE_PROB) {
+      const item = rng.pickWeighted(biome.items, (it) => it.w);
+      tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
+    }
   }
 
   // Starter guarantee: near spawn, sprinkle extra tiniest items.

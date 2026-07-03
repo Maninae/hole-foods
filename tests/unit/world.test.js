@@ -26,12 +26,40 @@ test('chunk object counts stay within sane bounds', () => {
   let total = 0;
   let chunks = 0;
   for (const chunk of w.chunks.values()) {
-    assert.ok(chunk.objects.length <= 60, `chunk has ${chunk.objects.length} objects`);
+    assert.ok(chunk.objects.length <= 80, `chunk has ${chunk.objects.length} objects`);
     total += chunk.objects.length;
     chunks++;
   }
   assert.ok(chunks > 9, 'expected several chunks generated');
-  assert.ok(total / chunks >= 3, `world feels empty: ${(total / chunks).toFixed(1)} obj/chunk`);
+  // Post-oasis, the average is lower because desert chunks are near-empty; a
+  // world that hits 2 obj/chunk on average is still visibly alive up close
+  // (starter chunks and oases are dense).
+  assert.ok(total / chunks >= 2, `world feels empty: ${(total / chunks).toFixed(1)} obj/chunk`);
+});
+
+test('object density is oasis-and-desert: rich clusters between sparse stretches', () => {
+  const w = createWorld('oasis');
+  // Cover a wide swath of level-0 space away from the starter radius so the
+  // starter guarantee does not skew the distribution. 30x30 chunks at
+  // (~15*CHUNK, ~15*CHUNK) sits comfortably inside cycle 0.
+  const C = CONFIG.CHUNK;
+  ensureChunksAround(w, 15 * C, 15 * C, 30 * C, 30 * C);
+  let rich = 0;
+  let sparse = 0;
+  let total = 0;
+  for (const chunk of w.chunks.values()) {
+    if (chunk.level !== 0) continue;
+    const cd = Math.hypot((chunk.cx + 0.5) * C, (chunk.cy + 0.5) * C);
+    if (cd < CONFIG.STARTER_RADIUS) continue;
+    total++;
+    if (chunk.objects.length >= 10) rich++;
+    if (chunk.objects.length <= 2) sparse++;
+  }
+  assert.ok(total >= 200, `need a wide sample; only ${total} chunks inspected`);
+  assert.ok(rich / total >= 0.05,
+    `only ${rich}/${total} rich chunks (${(100 * rich / total).toFixed(1)}%) — no oases`);
+  assert.ok(sparse / total >= 0.50,
+    `only ${sparse}/${total} sparse chunks (${(100 * sparse / total).toFixed(1)}%) — no desert`);
 });
 
 test('the starter area always has food a newborn hole can eat', () => {
@@ -59,18 +87,20 @@ test('no object sits on the spawn point', () => {
 
 test('eaten objects stay eaten across unload and regeneration', () => {
   const w = createWorld('eaten');
-  ensureChunksAround(w, 1200, 1200, 800, 600);
-  const before = snapshotChunk(w, 2, 2);
+  ensureChunksAround(w, 0, 0, 800, 600);
+  // Chunk (0,0) is inside STARTER_RADIUS, so it is always an oasis with the
+  // tiniest-item sprinkle — guaranteed non-empty.
+  const before = snapshotChunk(w, 0, 0);
   assert.ok(before.length > 0, 'need a non-empty chunk for this test');
-  const victim = w.chunks.get(chunkKey(0, 2, 2)).objects[0];
+  const victim = w.chunks.get(chunkKey(0, 0, 0)).objects[0];
   markEaten(w, victim);
 
   // Simulate wandering far away (chunk unloads), then coming back.
   ensureChunksAround(w, 100000, 100000, 800, 600);
-  assert.ok(!w.chunks.has(chunkKey(0, 2, 2)), 'chunk should have unloaded');
-  ensureChunksAround(w, 1200, 1200, 800, 600);
+  assert.ok(!w.chunks.has(chunkKey(0, 0, 0)), 'chunk should have unloaded');
+  ensureChunksAround(w, 0, 0, 800, 600);
 
-  const after = snapshotChunk(w, 2, 2);
+  const after = snapshotChunk(w, 0, 0);
   assert.equal(after.length, before.length - 1);
   assert.ok(!after.some((o) => o.id === victim.id), 'eaten object came back');
 });
