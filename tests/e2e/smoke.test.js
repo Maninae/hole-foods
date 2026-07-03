@@ -64,7 +64,7 @@ test('desktop: boots clean, plays, swallows, grows', async () => {
 
   // Steer with real mouse moves toward the nearest edible object until fed.
   const deadline = Date.now() + 25000;
-  let score = 0;
+  let score = '0'; // BigInt lives page-side; we carry it out as a decimal string
   while (Date.now() < deadline) {
     const target = await page.evaluate(() => {
       const g = window.__game;
@@ -80,18 +80,19 @@ test('desktop: boots clean, plays, swallows, grows', async () => {
       }
       if (!best) return null;
       const s = g.worldToScreen(best.x, best.y);
-      return { x: s.x, y: s.y, score: hole.score };
+      // Score is BigInt in the page context; stringify to cross page.evaluate.
+      return { x: s.x, y: s.y, score: String(hole.score) };
     });
     assert.ok(target, 'no edible object found anywhere');
     score = target.score;
-    if (score > 0) break;
+    if (BigInt(score) > 0n) break;
     await page.mouse.move(
       Math.min(1430, Math.max(10, target.x)),
       Math.min(890, Math.max(10, target.y)),
     );
     await page.waitForTimeout(120);
   }
-  assert.ok(score > 0, 'never swallowed anything within 25s');
+  assert.ok(BigInt(score) > 0n, 'never swallowed anything within 25s');
 
   const after1 = await page.evaluate(() => ({
     r: window.__game.hole.r,
@@ -131,10 +132,11 @@ test('best run is recorded after pausing', async () => {
   await page.waitForLoadState('networkidle');
   await page.click('#btn-play');
   // Cheat a little: feed the engine directly (still exercises persistence).
-  await page.evaluate(() => { window.__game.hole.score = 4321; });
+  // Score is BigInt end-to-end and JSON-serializes as a decimal string.
+  await page.evaluate(() => { window.__game.hole.score = 4321n; });
   await page.keyboard.press('KeyP');
   const best = await page.evaluate(() => JSON.parse(localStorage.getItem('holefoods.best')));
-  assert.equal(best.score, 4321);
+  assert.equal(best.score, '4321');
   await page.close();
 });
 

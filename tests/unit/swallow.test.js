@@ -77,7 +77,8 @@ test('combo multiplier actually multiplies points', () => {
   const swallows = events.filter((e) => e.type === 'swallow');
   assert.ok(swallows.some((e) => e.points > e.basePoints), 'no multiplied swallow seen');
   const boosted = swallows.find((e) => e.points > e.basePoints);
-  assert.ok(boosted.points >= base * 2 * 0.8, 'boosted points should reflect multiplier');
+  // Any combo boost hits ×2 minimum. base and points are BigInt.
+  assert.ok(boosted.points >= base * 2n, 'boosted points should reflect multiplier');
 });
 
 test('a level-up event fires when enough is eaten', () => {

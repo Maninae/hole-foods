@@ -167,8 +167,12 @@ export function sizeMultForBand(band) {
 }
 
 // Points scale with placed (post-multiplier) area — scale-free across cycles.
+// Returns BigInt: the fractal world can produce scores well past 2^53, so the
+// authoritative point value has to be exact-integer at any magnitude. The
+// double-precision area math before conversion is fine — magnitude is what
+// matters, not the last few digits of an already-huge number.
 export function pointsFor(placedRadius) {
-  return Math.max(1, Math.round((placedRadius * placedRadius) / CONFIG.POINTS_DIV));
+  return BigInt(Math.max(1, Math.round((placedRadius * placedRadius) / CONFIG.POINTS_DIV)));
 }
 
 // Roman-numeral suffix for cycled biome names: "Berry Meadow II".

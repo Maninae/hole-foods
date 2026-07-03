@@ -99,7 +99,9 @@ function finalizeSwallow(sw, now, world, hole, obj, events) {
   sw.mult = newMult;
 
   const big = obj.r > hole.r * 0.55;
-  const points = obj.points * sw.mult;
+  // Points math stays in BigInt land: obj.points is BigInt, sw.mult is a
+  // small Number multiplier we widen for the multiply.
+  const points = obj.points * BigInt(sw.mult);
   const { leveledUp, newLevel } = eat(hole, obj.r, points);
 
   events.push({

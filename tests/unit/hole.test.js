@@ -9,16 +9,16 @@ test('a fresh hole has the configured starting radius, level 1, zero score', () 
   const h = createHole();
   assert.equal(h.r, CONFIG.HOLE_R0);
   assert.equal(h.level, 1);
-  assert.equal(h.score, 0);
+  assert.equal(h.score, 0n);
 });
 
 test('eating grows the hole by area accumulation', () => {
   const h = createHole();
   const s = 10;
-  eat(h, s, 12);
+  eat(h, s, 12n);
   const expected = Math.sqrt(CONFIG.HOLE_R0 ** 2 + CONFIG.GROWTH_K * s * s);
   assert.ok(Math.abs(h.r - expected) < 1e-9, `r=${h.r}, expected ${expected}`);
-  assert.equal(h.score, 12);
+  assert.equal(h.score, 12n);
   assert.equal(h.eatenCount, 1);
 });
 
@@ -27,7 +27,7 @@ test('growth is scale-free: eating ~3 own-size objects grows radius ~fixed ratio
     const h = createHole();
     h.r = startR;
     const before = h.r;
-    for (let i = 0; i < 3; i++) eat(h, h.r * 0.8, 1);
+    for (let i = 0; i < 3; i++) eat(h, h.r * 0.8, 1n);
     const ratio = h.r / before;
     assert.ok(ratio > 1.25 && ratio < 1.45, `ratio ${ratio.toFixed(3)} at start ${startR}`);
   }
@@ -48,7 +48,7 @@ test('eat reports level-ups', () => {
   let leveled = false;
   // Eat until we cross the first milestone.
   for (let i = 0; i < 100 && !leveled; i++) {
-    leveled = eat(h, 10, 1).leveledUp;
+    leveled = eat(h, 10, 1n).leveledUp;
   }
   assert.ok(leveled, 'never leveled up');
   assert.equal(h.level, 2);

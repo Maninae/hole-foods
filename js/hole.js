@@ -10,7 +10,7 @@ export function createHole() {
     vx: 0, vy: 0,
     r: CONFIG.HOLE_R0,
     level: 1,
-    score: 0,
+    score: 0n,
     eatenCount: 0,
   };
 }
@@ -43,7 +43,9 @@ export function updateHole(hole, dt, dir) {
   hole.y += hole.vy * dt;
 }
 
-// Swallow an object of placed radius s worth `points`. Returns level-up info.
+// Swallow an object of placed radius s worth `points` (BigInt). Returns
+// level-up info. Radius/level math stays Number — scale-free growth cares
+// about ratios, not exactness — but score is authoritative BigInt.
 export function eat(hole, s, points) {
   hole.r = Math.sqrt(hole.r * hole.r + CONFIG.GROWTH_K * s * s);
   hole.score += points;

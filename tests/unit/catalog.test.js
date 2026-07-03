@@ -53,7 +53,8 @@ test('biomes cycle and size multiplier compounds per cycle', () => {
 });
 
 test('points scale with placed area, never below 1', () => {
-  assert.equal(pointsFor(10), Math.round(100 / CONFIG.POINTS_DIV));
-  assert.equal(pointsFor(2), 1);
+  assert.equal(pointsFor(10), BigInt(Math.round(100 / CONFIG.POINTS_DIV)));
+  assert.equal(pointsFor(2), 1n);
   assert.ok(pointsFor(100) > pointsFor(50));
+  assert.equal(typeof pointsFor(10), 'bigint');
 });
