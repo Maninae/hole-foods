@@ -11,7 +11,7 @@ export const CONFIG = {
 
   // Hole
   HOLE_R0: 22,            // starting radius (world units)
-  GROWTH_K: 0.35,         // fraction of swallowed object area added to hole area
+  GROWTH_K: 0.02,         // fraction of swallowed object area added to hole area
   FIT_FACTOR: 0.95,       // object fits if obj.r <= hole.r * FIT_FACTOR
   LEVEL_R_GROWTH: 1.22,   // level n at radius HOLE_R0 * LEVEL_R_GROWTH^(n-1)
   SPEED_BASE: 260,        // world units/sec at starting size

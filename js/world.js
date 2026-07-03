@@ -20,7 +20,7 @@ const CLUSTER_MAX_BASE_R = 70;
 // A region is an oasis with this probability; the rest is sparse desert.
 // Regions inside the starter radius are always oases regardless of the roll.
 const REGION_SIZE = 3;
-const OASIS_PROB = 0.22;
+const OASIS_PROB = 0.35;
 // Desert chunks' crumbs are drawn from a biome's smallest few items.
 const DESERT_ITEM_TIER = 4;
 // A desert chunk still gets a single full-table surprise this often — a rare
@@ -128,7 +128,7 @@ function generateChunk(world, level, cx, cy) {
   if (isOasis) {
     // Rich: several decorative clusters plus a bunch of scattered singles.
     const clusterItems = biome.items.filter((it) => it.r <= CLUSTER_MAX_BASE_R);
-    const nClusters = clusterItems.length === 0 ? 0 : rng.int(2, 3);
+    const nClusters = clusterItems.length === 0 ? 0 : rng.int(3, 5);
     for (let ci = 0; ci < nClusters; ci++) {
       const item = rng.pickWeighted(clusterItems, (it) => it.w);
       const pattern = rng.pick(PATTERN_KEYS);
@@ -138,7 +138,7 @@ function generateChunk(world, level, cx, cy) {
         tryPlace(item, cxw + p.x, cyw + p.y);
       }
     }
-    const nSingles = rng.int(5, 9);
+    const nSingles = rng.int(7, 13);
     for (let i = 0; i < nSingles; i++) {
       const item = rng.pickWeighted(biome.items, (it) => it.w);
       tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);

@@ -82,7 +82,9 @@ test('combo multiplier actually multiplies points', () => {
 });
 
 test('a level-up event fires when enough is eaten', () => {
-  const objs = Array.from({ length: 30 }, (_, i) => makeObj(i, 0, 0, 12));
+  // Object size and count sized against the current GROWTH_K: enough
+  // fitting objects to cross the level-2 threshold within FALL_TIME.
+  const objs = Array.from({ length: 60 }, (_, i) => makeObj(i, 0, 0, 20));
   const { world, hole, sw } = makeFixture(objs);
   const events = runSeconds(sw, world, hole, 20);
   assert.ok(events.some((e) => e.type === 'levelup'), 'no levelup event');

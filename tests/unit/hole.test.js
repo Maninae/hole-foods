@@ -23,13 +23,15 @@ test('eating grows the hole by area accumulation', () => {
 });
 
 test('growth is scale-free: eating ~3 own-size objects grows radius ~fixed ratio', () => {
+  // Ratio = sqrt(1 + 3·GROWTH_K·0.64); bounds bracket the current GROWTH_K
+  // wide enough to survive small tuning nudges without hiding a real change.
   for (const startR of [22, 220, 2200]) {
     const h = createHole();
     h.r = startR;
     const before = h.r;
     for (let i = 0; i < 3; i++) eat(h, h.r * 0.8, 1n);
     const ratio = h.r / before;
-    assert.ok(ratio > 1.25 && ratio < 1.45, `ratio ${ratio.toFixed(3)} at start ${startR}`);
+    assert.ok(ratio > 1.01 && ratio < 1.05, `ratio ${ratio.toFixed(3)} at start ${startR}`);
   }
 });
 
@@ -46,8 +48,9 @@ test('levels are radius milestones and progress stays in [0, 1)', () => {
 test('eat reports level-ups', () => {
   const h = createHole();
   let leveled = false;
-  // Eat until we cross the first milestone.
-  for (let i = 0; i < 100 && !leveled; i++) {
+  // Eat until we cross the first milestone. Loop count scales with GROWTH_K:
+  // at K=0.02 it takes ~120 s=10 eats to cross the level-2 threshold.
+  for (let i = 0; i < 300 && !leveled; i++) {
     leveled = eat(h, 10, 1n).leveledUp;
   }
   assert.ok(leveled, 'never leveled up');
