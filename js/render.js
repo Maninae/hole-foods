@@ -1,12 +1,17 @@
-// Scene renderer: ground -> decals -> hole (pit, falling, rim) -> objects
-// -> effects. Owns the canvas + DPR; camera math comes from camera.js.
+// Scene renderer: two passes.
+//  1. Ground plane (squashed by ISO_Y): ground, decals, hole pit/rim/falling,
+//     tease rings, and fx particles/rings. Arcs drawn here become ellipses
+//     for free — that's what sells the pseudo-3D.
+//  2. Billboard (unsquashed): contact shadows, sprites drawn upright and
+//     lifted so they stand on the plane, and score floaters at screen size.
+// Owns the canvas + DPR; camera math comes from camera.js.
 
 import { getTransform } from './camera.js';
 import { drawGround } from './ground.js';
 import { forEachChunkInRect } from './world.js';
 import { drawEmoji } from './sprites.js';
 import { fallingVisual } from './swallow.js';
-import { drawFx } from './particles.js';
+import { drawFxWorld, drawFxText } from './particles.js';
 import { CONFIG } from './config.js';
 
 export function createRenderer(canvas) {
@@ -103,15 +108,16 @@ export function renderScene(R, state) {
   const t = getTransform(cam, w, h);
   const screenScale = t.scale * dpr;
 
-  ctx.setTransform(dpr * t.scale, 0, 0, dpr * t.scale, dpr * t.tx, dpr * t.ty);
+  // --- Ground-plane pass (squashed by ISO_Y) ---
+  ctx.setTransform(dpr * t.scale, 0, 0, dpr * t.scaleY, dpr * t.tx, dpr * t.ty);
   const x0 = -t.tx / t.scale;
-  const y0 = -t.ty / t.scale;
   const x1 = x0 + w / t.scale;
-  const y1 = y0 + h / t.scale;
+  const y0 = -t.ty / t.scaleY;
+  const y1 = y0 + h / t.scaleY;
 
   drawGround(ctx, world, x0, y0, x1, y1);
 
-  // Ground decals.
+  // Ground decals (flat).
   ctx.globalAlpha = 0.5;
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     for (const d of chunk.decals) {
@@ -121,10 +127,7 @@ export function renderScene(R, state) {
   });
   ctx.globalAlpha = 1;
 
-  drawHole(ctx, hole, sw, time, screenScale);
-
-  // Collect visible idle objects, painter-sorted by y. Sub-pixel objects
-  // (deep-inner cycles seen from far out) aren't worth a draw call.
+  // Collect visible idle objects; sub-pixel skips deep-inner cycles cheaply.
   const visible = [];
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     for (const o of chunk.objects) {
@@ -136,31 +139,67 @@ export function renderScene(R, state) {
   });
   visible.sort((a, b) => a.y - b.y);
 
-  // Shadows first so they never land on a neighbor's sprite.
-  ctx.fillStyle = 'rgba(25, 20, 50, 0.16)';
+  drawHole(ctx, hole, sw, time, screenScale);
+
+  // Tease ring on almost-fitting objects — an arc here becomes an ellipse
+  // on the ground plane, so it reads as a ring flat on the floor.
+  const fitLimit = hole.r * CONFIG.FIT_FACTOR;
   for (const o of visible) {
+    if (o.r <= fitLimit || o.r >= fitLimit * 1.45) continue;
+    const d = Math.hypot(o.x - hole.x, o.y - hole.y);
+    if (d >= hole.r * 3.2 + o.r) continue;
+    ctx.globalAlpha = 0.28 + 0.18 * Math.sin(time * 5);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.5, o.r * 0.06);
     ctx.beginPath();
-    ctx.ellipse(o.x, o.y + o.r * 0.55, o.r * 0.78, o.r * 0.28, 0, 0, Math.PI * 2);
+    ctx.arc(o.x, o.y, o.r * 1.12, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  drawFxWorld(ctx, fx);
+
+  // --- Billboard pass (upright) ---
+  // Sprites and shadows go straight to CSS-pixel space so nothing gets
+  // vertically squished; we manually map world -> screen per draw.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Elliptical contact shadows first, so a later sprite covers a neighbor's
+  // shadow instead of the reverse.
+  ctx.fillStyle = 'rgba(25, 20, 50, 0.18)';
+  for (const o of visible) {
+    const sx = o.x * t.scale + t.tx;
+    const sy = o.y * t.scaleY + t.ty;
+    const rx = o.r * 0.8 * t.scale;
+    const ry = rx * 0.38;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy + ry * 0.35, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  const fitLimit = hole.r * CONFIG.FIT_FACTOR;
+  // Sprites, y-sorted, upright, lifted so they stand on the ground plane.
   for (const o of visible) {
-    // Tease ring on almost-fitting objects near the hole: "grow a bit more".
-    if (o.r > fitLimit && o.r < fitLimit * 1.45) {
-      const d = Math.hypot(o.x - hole.x, o.y - hole.y);
-      if (d < hole.r * 3.2 + o.r) {
-        ctx.globalAlpha = 0.28 + 0.18 * Math.sin(time * 5);
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = Math.max(1.5, o.r * 0.06);
-        ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r * 1.12, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
+    const sx = o.x * t.scale + t.tx;
+    const sy = o.y * t.scaleY + t.ty;
+    const rScreen = o.r * t.scale;
+    const lift = rScreen * 0.22;
+
+    // Teeter lean: horizontal-only, sign follows the hole direction; the
+    // sprite also sinks a touch as if losing its footing over the void.
+    const tilt = o.tilt || 0;
+    let leanRot = 0;
+    let sink = 0;
+    if (tilt) {
+      const dx = hole.x - o.x;
+      const dy = hole.y - o.y;
+      const dist = Math.max(Math.hypot(dx, dy), 1);
+      const sign = Math.max(-1, Math.min(1, dx / dist));
+      leanRot = tilt * sign;
+      sink = tilt * o.r * 0.25 * t.scale;
     }
-    drawEmoji(ctx, o.e, o.x, o.y, o.r, o.rot, screenScale);
+    drawEmoji(ctx, o.e, sx, sy - lift + sink, rScreen, (o.rot || 0) + leanRot, dpr);
   }
 
-  drawFx(ctx, fx, cam.zoom);
+  // Score floaters last: upright, min-screen-size, straight onto CSS px.
+  drawFxText(ctx, fx, t);
 }

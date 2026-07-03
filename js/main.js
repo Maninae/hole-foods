@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 import { createWorld, ensureChunksAround, bandAt } from './world.js';
 import { createHole, updateHole } from './hole.js';
 import { createSwallow, swallowUpdate } from './swallow.js';
-import { createCamera, updateCamera, shake } from './camera.js';
+import { createCamera, updateCamera, shake, worldToScreen } from './camera.js';
 import { createRenderer, renderScene } from './render.js';
 import { createFx, updateFx, suckBurst, confetti, floatText, ringPulse } from './particles.js';
 import { createInput } from './input.js';
@@ -97,7 +97,12 @@ function frame(nowMs) {
     game.time += dt;
     const dir = input.getDirection(hole, cam, R.w, R.h);
     updateHole(hole, dt, dir);
-    ensureChunksAround(world, hole.x, hole.y, R.w / cam.zoom, R.h / cam.zoom);
+    // Iso squash makes the visible world taller-narrower on screen: the y
+    // extent divides by (zoom * ISO_Y), not just zoom.
+    ensureChunksAround(
+      world, hole.x, hole.y,
+      R.w / cam.zoom, R.h / (cam.zoom * CONFIG.ISO_Y),
+    );
     handleEvents(swallowUpdate(sw, dt, game.time, world, hole));
     updateCamera(cam, dt, hole);
     updateFx(fx, dt);
@@ -109,7 +114,10 @@ function frame(nowMs) {
     cam.x = Math.cos(game.time * 0.07) * 300;
     cam.y = Math.sin(game.time * 0.07) * 300;
     cam.zoom = 0.9;
-    ensureChunksAround(world, cam.x, cam.y, R.w / cam.zoom, R.h / cam.zoom);
+    ensureChunksAround(
+      world, cam.x, cam.y,
+      R.w / cam.zoom, R.h / (cam.zoom * CONFIG.ISO_Y),
+    );
   }
 
   renderScene(R, { world, hole, cam, sw, fx, time: game.time });
@@ -199,10 +207,6 @@ window.__game = {
   get cam() { return game.cam; },
   get sw() { return game.sw; },
   worldToScreen(x, y) {
-    const scale = game.cam.zoom;
-    return {
-      x: R.w / 2 + (x - game.cam.x - game.cam.shakeX) * scale,
-      y: R.h / 2 + (y - game.cam.y - game.cam.shakeY) * scale,
-    };
+    return worldToScreen(game.cam, R.w, R.h, x, y);
   },
 };

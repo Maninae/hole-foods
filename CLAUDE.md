@@ -30,9 +30,14 @@ js/sprites.js        emoji → offscreen-canvas cache, size buckets ≤1024px;
                      bigger draws fall back to direct fillText (stays crisp)
 js/ground.js         ONE radial gradient from world origin per frame (bands are
                      radial ⇒ smooth biome blending), + per-biome dot tiles
-js/particles.js      suck-burst / confetti / floaters / rings pools
-js/render.js         scene order: ground → decals → hole(pit→falling(clipped)→rim)
-                     → objects (y-sorted, shadows first) → fx
+js/particles.js      suck-burst / confetti / floaters / rings pools;
+                     drawFxWorld (parts+rings, ground plane) / drawFxText
+                     (floaters, billboard/screen space) split for iso view
+js/render.js         two passes for the pseudo-3D view:
+                     GROUND (squashed by ISO_Y): ground → decals → hole
+                     (pit→falling(clipped)→rim) → tease rings → fxWorld.
+                     BILLBOARD (upright): shadows → sprites y-sorted (lifted,
+                     tilt-lean toward hole) → score floaters
 js/hud.js            DOM HUD + overlays + best-run localStorage
 js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ```

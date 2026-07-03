@@ -86,8 +86,9 @@ export function updateFx(fx, dt) {
   }
 }
 
-// ctx is in world transform; zoom lets text keep a readable screen size.
-export function drawFx(ctx, fx, zoom) {
+// Parts + rings live on the ground plane: draw under the renderer's squashed
+// transform so arcs become ellipses for free.
+export function drawFxWorld(ctx, fx) {
   for (const p of fx.parts) {
     const k = 1 - p.t / p.life;
     ctx.globalAlpha = k;
@@ -109,21 +110,28 @@ export function drawFx(ctx, fx, zoom) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
+}
 
+// Score floaters render UPRIGHT in the billboard pass — the renderer resets
+// the transform to CSS-pixel space and we map each float manually via `t`.
+// Text stays readable no matter how zoomed out the world is.
+export function drawFxText(ctx, fx, t) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const f of fx.floats) {
     const k = f.t / f.life;
-    const rise = f.up * (1 - Math.pow(1 - k, 2));
-    // Never smaller than ~15 CSS px on screen, whatever the zoom.
-    const px = Math.max(f.size, 15 / zoom);
+    const sx = f.x * t.scale + t.tx;
+    const sy = f.y * t.scaleY + t.ty;
+    const rise = f.up * (1 - Math.pow(1 - k, 2)) * t.scaleY;
+    // Never smaller than ~15 CSS px, whatever the zoom.
+    const px = Math.max(f.size * t.scale, 15);
     ctx.globalAlpha = k < 0.15 ? k / 0.15 : 1 - Math.max(0, (k - 0.55) / 0.45);
     ctx.font = `800 ${px}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
     ctx.lineWidth = px * 0.1;
     ctx.strokeStyle = 'rgba(30, 20, 40, 0.4)';
-    ctx.strokeText(f.text, f.x, f.y - rise);
+    ctx.strokeText(f.text, sx, sy - rise);
     ctx.fillStyle = f.sat > 0 ? `hsl(${f.hue} ${f.sat}% 72%)` : '#fff';
-    ctx.fillText(f.text, f.x, f.y - rise);
+    ctx.fillText(f.text, sx, sy - rise);
   }
   ctx.globalAlpha = 1;
 }
