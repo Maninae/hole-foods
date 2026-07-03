@@ -73,15 +73,25 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 - **Padded queries:** objects can sit outside their owning chunk's rect;
   PAD=3 chunks (in each level's own units) always covers cluster extents.
 - **1 world unit = 1 cm** for the HUD size label. Hole starts r=22 (44 cm).
-- Growth is scale-free: `r' = √(r² + 0.35·s²)`; points = `s²/8`. If you change
+- **Rim physics, not vacuum:** objects are inert until the hole's edge is
+  under them (overhang > 0), teeter below 0.5, tip at 0.5. Never reintroduce
+  long-range attraction — it was removed on purpose (owner feedback).
+- **Score is BigInt** end-to-end (pointsFor → events → hole.score → storage
+  as string). Never mix it into Number arithmetic; format via hud.fmtNum.
+- **Balance is sim-tuned:** GROWTH_K and the oasis density constants were set
+  by greedy-bot simulation (`npm run sim -- 12 <seed>`; cycle 1 ≈ 4 min
+  greedy ≈ 5-8 min human, ~1.4-1.8x per cycle after). Re-run sims on 2-3
+  seeds before changing them.
+- Growth is scale-free: `r' = √(r² + GROWTH_K·s²)`; points = `s²/8`. If you change
   one, the pacing tests will tell you.
 
 ## Testing
 
 ```
-npm test           # 53 unit tests (node --test tests/unit/*.test.js)
-npm run test:e2e   # 4 Playwright tests: real steering → swallow → growth,
-                   # pause/mute/best persistence, mobile overflow (iPhone 13)
+npm test           # 64 unit tests (node --test tests/unit/*.test.js)
+npm run test:e2e   # 5 Playwright tests: real steering → swallow → growth,
+                   # pause/mute/best persistence, Cmd+Tab stuck-key, mobile
+npm run sim -- 12  # headless greedy-bot balance sim (minutes, seed args)
 ```
 
 `window.__game` exposes live state (mode/world/hole/cam/sw + worldToScreen)

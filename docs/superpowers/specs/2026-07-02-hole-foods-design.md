@@ -79,6 +79,16 @@ Owen's playtest at ~level 28 exposed the scale break: `ZOOM_MIN 0.26` let the ho
 
 Covered by `tests/unit/fractal.test.js` (band geometry, level ownership, bounded chunk counts, LOD skipping, cross-boundary queries).
 
+## Amendment (2026-07-03, second playtest wave)
+
+Owner playtesting drove five changes, built by a subagent swarm against locked contracts:
+
+1. **Rim physics replaced the vacuum** — objects are inert until the hole's edge is under them; they teeter (tilt + wobble) while partially supported, creep in past 30% overhang as the edge gives way, and tip when their center loses support. Two-phase fall: tip over the rim, then gravity-slide down the funnel. (`rim.test.js`)
+2. **Isometric view** — pseudo-3D: the ground plane (ground, decals, hole, particles) renders under a Y-squashed transform (`ISO_Y 0.72`, hole becomes an ellipse), while objects render as upright billboards with elliptical contact shadows and teeter-lean. Physics stays circular in world space.
+3. **Oasis distribution** — 3×3-chunk regions roll oasis (35%) vs desert; oases are rich (3-5 clusters + singles), deserts carry only crumbs from the biome's smallest items plus rare surprises. Starter area is always an oasis.
+4. **BigInt score** — points and score are exact integers at any magnitude (fractal play exceeds 2^53 fast); storage serializes as string; `fmtNum` ladders K…Dc then e-notation.
+5. **Sim-tuned balance** — `tools/simulate.mjs` greedy bot; `GROWTH_K 0.35 → 0.02` (the runaway lever) offset by denser oases so cycle boundaries don't bootstrap-wall. Greedy cycle 1 ≈ 4 min (human ≈ 5-8), ~1.4-1.8× per cycle after, doubling time grows past 100 s. Zoom floor dropped to 1e-7 (the 0.002 floor re-broke the fractal invariant at ~11 km).
+
 ## Out of scope (YAGNI)
 
 Multiplayer/AI holes, timers/quests/skins/shops, app-store packaging, backend anything, save-mid-run world state (only best-run + mute persist).
