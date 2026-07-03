@@ -29,21 +29,8 @@ function runSeconds(sw, world, hole, seconds, startNow = 0) {
   return events;
 }
 
-test('a fitting object in pull range accelerates toward the hole', () => {
-  const obj = makeObj(0, 50, 0, 10); // hole r=22 at origin; well within pull range
-  const { world, hole, sw } = makeFixture([obj]);
-  swallowUpdate(sw, 1 / 60, 0, world, hole);
-  assert.ok(obj.vx < 0, `should be pulled left toward hole, vx=${obj.vx}`);
-});
-
-test('a too-big object is never pulled or swallowed', () => {
-  const obj = makeObj(0, 30, 0, 30); // r=30 > 22 * 0.95
-  const { world, hole, sw } = makeFixture([obj]);
-  const events = runSeconds(sw, world, hole, 1.0);
-  assert.equal(obj.vx, 0);
-  assert.equal(obj.state, 'idle');
-  assert.equal(events.length, 0);
-});
+// Rim/teeter behavior lives in rim.test.js; this file covers the fall
+// state machine, scoring, combos, and persistence.
 
 test('an object over the hole tips in and is consumed after FALL_TIME', () => {
   const obj = makeObj(0, 0, 0, 10);

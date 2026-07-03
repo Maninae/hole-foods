@@ -37,17 +37,25 @@ export function updateCamera(cam, dt, hole, rand = Math.random) {
   cam.shakeY = (rand() * 2 - 1) * cam.shakeAmp;
 }
 
-// Screen = world * scale + t. CSS-pixel space; the renderer layers DPR on top.
+// Screen = world * scale + t, with the Y axis squashed by ISO_Y for the
+// pseudo-3D view. CSS-pixel space; the renderer layers DPR on top.
 export function getTransform(cam, w, h) {
   const scale = cam.zoom;
+  const scaleY = scale * CONFIG.ISO_Y;
   return {
     scale,
+    scaleY,
     tx: w / 2 - (cam.x + cam.shakeX) * scale,
-    ty: h / 2 - (cam.y + cam.shakeY) * scale,
+    ty: h / 2 - (cam.y + cam.shakeY) * scaleY,
   };
+}
+
+export function worldToScreen(cam, w, h, x, y) {
+  const t = getTransform(cam, w, h);
+  return { x: x * t.scale + t.tx, y: y * t.scaleY + t.ty };
 }
 
 export function screenToWorld(cam, w, h, sx, sy) {
   const t = getTransform(cam, w, h);
-  return { x: (sx - t.tx) / t.scale, y: (sy - t.ty) / t.scale };
+  return { x: (sx - t.tx) / t.scale, y: (sy - t.ty) / t.scaleY };
 }

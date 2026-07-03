@@ -19,10 +19,16 @@ export const CONFIG = {
                           // keeps on-screen speed near-constant at every scale
   ACCEL: 7,               // velocity easing rate (1/s)
 
-  // Swallowing
-  PULL_FACTOR: 1.9,       // pull range = hole.r * PULL_FACTOR + obj.r
-  PULL_ACCEL: 1400,       // peak pull acceleration (world units/s^2)
-  FALL_TIME: 0.45,        // seconds for the tip-in animation
+  // Swallowing — support-based rim physics, no long-range attraction.
+  // overhang = fraction of an object's footprint over the void (0.5 = its
+  // center is on the rim). Objects teeter below SLIDE_START, creep in past
+  // it, and tip the moment their center loses support (overhang >= 0.5).
+  RIM_SLIDE_START: 0.3,   // overhang where the edge starts giving way
+  RIM_SLIDE_ACCEL: 520,   // slide acceleration at full overhang (scales w/ hole)
+  RIM_TILT_MAX: 0.55,     // radians of lean as overhang approaches tipping
+  RIM_WOBBLE_FREQ: 9,     // teeter wobble (rad/s)
+  RIM_WOBBLE_AMP: 0.07,   // teeter wobble amplitude (radians)
+  FALL_TIME: 0.5,         // seconds for the tip-over + drop animation
   POINTS_DIV: 8,          // points = round(r^2 / POINTS_DIV)
 
   // Combo
@@ -32,8 +38,10 @@ export const CONFIG = {
   // Camera
   ZOOM_BASE: 1.1,
   ZOOM_EXP: 0.8,          // zoom ~ (r0/r)^ZOOM_EXP — grow on screen AND see more
-  ZOOM_MIN: 0.002,        // effectively unclamped — leveled chunks keep the
+  ZOOM_MIN: 1e-7,         // effectively unclamped — leveled chunks keep the
                           // per-frame work bounded at any zoom (fractal world)
+  ISO_Y: 0.72,            // pseudo-3D squash: ground plane compressed in Y,
+                          // objects billboarded upright on it
   ZOOM_MAX: 1.1,
   CAM_EASE: 4.5,          // camera follow easing (1/s)
   ZOOM_EASE: 1.6,         // zoom easing (1/s)
