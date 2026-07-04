@@ -32,7 +32,7 @@ export function createRenderer(canvas) {
   return R;
 }
 
-function drawHole(ctx, hole, sw, time, screenScale) {
+function drawHole(ctx, hole, sw, time, screenScale, zoom) {
   const { x, y, r } = hole;
 
   // Soft ambient-occlusion halo so the pit sits "into" the ground.
@@ -107,10 +107,17 @@ function drawHole(ctx, hole, sw, time, screenScale) {
   // so it hugs the rim ellipse like everything else. Width scales with the
   // hole so it stays ~4-6 screen px at any zoom (like the rim itself).
   const progress = levelProgress(r);
-  const meterW = Math.max(lw * 1.1, r * 0.075);
+  // Never thinner than ~4.5 CSS px, whatever the zoom — a just-leveled hole
+  // must still show a readable (mostly empty) meter.
+  const meterW = Math.max(lw * 1.1, r * 0.075, 4.5 / zoom);
   const meterR = r + lw * 1.2 + meterW * 1.4;
-  ctx.strokeStyle = 'rgba(20, 10, 32, 0.28)';
-  ctx.lineWidth = meterW + r * 0.02;
+  ctx.strokeStyle = 'rgba(20, 10, 32, 0.3)';
+  ctx.lineWidth = meterW * 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, meterR, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = meterW;
   ctx.beginPath();
   ctx.arc(x, y, meterR, 0, Math.PI * 2);
   ctx.stroke();
@@ -162,7 +169,7 @@ export function renderScene(R, state) {
   });
   visible.sort((a, b) => a.y - b.y);
 
-  drawHole(ctx, hole, sw, time, screenScale);
+  drawHole(ctx, hole, sw, time, screenScale, t.scale);
 
   // Tease ring on almost-fitting objects — an arc here becomes an ellipse
   // on the ground plane, so it reads as a ring flat on the floor.
