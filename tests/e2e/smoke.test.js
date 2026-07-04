@@ -279,6 +279,59 @@ test('P while the collection overlay is open closes it without resuming play', a
   await page.close();
 });
 
+test('HUD 🗺️ button opens the collection over live play and closes back to playing', async () => {
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(URL);
+  await page.waitForLoadState('networkidle');
+  await page.click('#btn-play');
+  assert.equal(await page.evaluate(() => window.__game.mode), 'playing');
+
+  // The HUD button lives in the top-right cluster next to mute/pause and
+  // is visible during play only.
+  const mapBtn = page.locator('#btn-map');
+  assert.ok(await mapBtn.isVisible(), 'map button should be visible during play');
+  await mapBtn.click();
+
+  // Overlay is up; sim is paused; the pause panel stays hidden (the map
+  // overlay is the modal).
+  assert.equal(await page.evaluate(() => window.__game.mode), 'paused');
+  assert.ok(!(await page.evaluate(
+    () => document.getElementById('collection').classList.contains('hidden'),
+  )), 'collection should be visible after tapping the HUD map button');
+  assert.ok(await page.evaluate(
+    () => document.getElementById('pause').classList.contains('hidden'),
+  ), 'pause panel must stay hidden when opened via the HUD map button');
+
+  // Escape closes and returns to playing (auto-resume).
+  await page.keyboard.press('Escape');
+  assert.ok(await page.evaluate(
+    () => document.getElementById('collection').classList.contains('hidden'),
+  ), 'collection should hide on Escape');
+  assert.equal(await page.evaluate(() => window.__game.mode), 'playing');
+  await page.close();
+});
+
+test('map renders every achievement node with an edge count that matches the graph', async () => {
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // Fresh save so most nodes are locked; the DOM count is what we care about.
+  await page.addInitScript(() => localStorage.removeItem('holefoods.progress'));
+  await page.goto(URL);
+  await page.waitForLoadState('networkidle');
+  await page.click('#btn-collection-start');
+
+  const counts = await page.evaluate(() => ({
+    nodes: document.querySelectorAll('#achievement-map .map-node').length,
+    edges: document.querySelectorAll('#achievement-map .map-edge').length,
+    stickers: document.querySelectorAll('#sticker-grid .sticker').length,
+  }));
+  assert.ok(counts.nodes >= 25, `expected at least 25 map nodes, got ${counts.nodes}`);
+  assert.ok(counts.edges >= 20, `expected at least 20 edges, got ${counts.edges}`);
+  assert.equal(counts.stickers, 18);
+  await page.close();
+});
+
 test('mobile (iPhone 13): boots clean, no horizontal overflow, play starts', async () => {
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
