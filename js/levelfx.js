@@ -1,10 +1,9 @@
-// MapleStory-style level-up celebration: expanding gold glow + ring pulses
-// on the ground plane, a tall vertical aura pillar in billboard space, a
-// big overshoot "LEVEL UP! N" title, and rising sparkles inside the beam.
+// MapleStory-style level-up celebration: expanding glow + ring pulses on
+// the ground plane, a tall vertical aura pillar in billboard space, a big
+// overshoot "LEVEL UP! N" title, and rising sparkles inside the beam.
 // Escalates with level; milestones every 10 add extra ring pulses and a
-// brief full-screen flash. Owns its own pool — the regular particles.js
-// pools stay unused for level-ups so this celebration reads as a distinct
-// hero moment.
+// brief full-screen flash. The aura COLOR climbs through a Super-Saiyan
+// ladder as levels rise (see AURA_TIERS) — same shapes, new palette.
 
 export function createLevelFx() {
   return { active: [] };
@@ -19,6 +18,64 @@ export function intensityForLevel(level) {
 export function isMilestone(level) {
   return level > 0 && level % 10 === 0;
 }
+
+// Aura color ladder — the celebration deepens through phases as the player
+// climbs. `core` is the bright inner tone; `glow` is the richer outer
+// tone. auraForLevel() LERPs between adjacent tiers so a level midway
+// between "rich azure" and "lavender" reads as a smooth graduation, not a
+// snap. Above the last tier, aura stays emerald.
+export const AURA_TIERS = [
+  { from: 1,  core: '#bfe5ff', glow: '#8ecdf7' }, // subtle sky blue
+  { from: 6,  core: '#7ec3ff', glow: '#2f7fd6' }, // richer azure
+  { from: 12, core: '#d9c4ff', glow: '#a78bfa' }, // lavender
+  { from: 20, core: '#b18cff', glow: '#5b2ea6' }, // dark royal purple
+  { from: 28, core: '#fff7c2', glow: '#ffe66b' }, // pale super-saiyan yellow
+  { from: 36, core: '#ffd166', glow: '#e6a417' }, // rich gold
+  { from: 45, core: '#d2f5d8', glow: '#7fe0a0' }, // pale green
+  { from: 55, core: '#7de8a8', glow: '#0f9d58' }, // rich emerald
+];
+
+function parseHex(h) {
+  const s = h.replace('#', '');
+  return [
+    parseInt(s.slice(0, 2), 16),
+    parseInt(s.slice(2, 4), 16),
+    parseInt(s.slice(4, 6), 16),
+  ];
+}
+function lerp(a, b, t) { return a + (b - a) * t; }
+function lerpRgb(a, b, t) {
+  return [
+    Math.round(lerp(a[0], b[0], t)),
+    Math.round(lerp(a[1], b[1], t)),
+    Math.round(lerp(a[2], b[2], t)),
+  ];
+}
+// Parsed once — AURA_TIERS is authoritative as hex; internals cache RGB.
+const _TIER_RGB = AURA_TIERS.map((t) => ({
+  from: t.from, core: parseHex(t.core), glow: parseHex(t.glow),
+}));
+
+// Returns {core: [r,g,b], glow: [r,g,b]} smoothly interpolated between
+// adjacent aura tiers. Clamps to the endpoints outside the ladder range.
+export function auraForLevel(level) {
+  const first = _TIER_RGB[0];
+  const last = _TIER_RGB[_TIER_RGB.length - 1];
+  if (level <= first.from) return { core: first.core.slice(), glow: first.glow.slice() };
+  if (level >= last.from) return { core: last.core.slice(), glow: last.glow.slice() };
+  for (let i = 0; i < _TIER_RGB.length - 1; i++) {
+    const a = _TIER_RGB[i];
+    const b = _TIER_RGB[i + 1];
+    if (level >= a.from && level < b.from) {
+      const t = (level - a.from) / (b.from - a.from);
+      return { core: lerpRgb(a.core, b.core, t), glow: lerpRgb(a.glow, b.glow, t) };
+    }
+  }
+  // Unreachable given the clamps above.
+  return { core: last.core.slice(), glow: last.glow.slice() };
+}
+
+function rgba([r, g, b], a) { return `rgba(${r}, ${g}, ${b}, ${a})`; }
 
 const BASE_DURATION = 1.85;
 
@@ -40,6 +97,7 @@ export function spawnLevelUp(fx, level, hole, opts = {}) {
     reducedMotion,
     duration,
     t: 0,
+    aura: auraForLevel(level),
     ringSchedule: reducedMotion ? [] : buildRings(level, milestone),
     sparkles: [],
     // In reduced-motion mode we suppress pillar+sparkle+flash entirely.
@@ -111,9 +169,11 @@ export function drawLevelFxGround(ctx, fx, tr, w, h) {
   for (const c of fx.active) {
     const k = c.t / c.duration;
     const rScreen = c.r * tr.scale;
+    const { core, glow } = c.aura;
 
-    // Expanding gold flash: bounded in screen space so it doesn't paint the
-    // entire viewport at deep zoom-out (big holes).
+    // Expanding aura flash: bounded in screen space so it doesn't paint the
+    // entire viewport at deep zoom-out (big holes). Inner tone = core, outer
+    // = glow — the palette climbs the Super-Saiyan ladder as levels rise.
     const glowK = Math.max(0, 1 - k * 1.9);
     if (glowK > 0) {
       const flashScreen = Math.min(
@@ -123,10 +183,10 @@ export function drawLevelFxGround(ctx, fx, tr, w, h) {
       const rrScreen = flashScreen * (0.28 + 0.72 * Math.pow(1 - glowK, 0.55));
       const rrWorld = rrScreen / tr.scale;
       const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rrWorld);
-      g.addColorStop(0, `rgba(255, 245, 205, ${0.85 * glowK})`);
-      g.addColorStop(0.28, `rgba(255, 210, 110, ${0.55 * glowK})`);
-      g.addColorStop(0.65, `rgba(255, 175, 70, ${0.25 * glowK})`);
-      g.addColorStop(1, 'rgba(255, 160, 60, 0)');
+      g.addColorStop(0, rgba(core, 0.85 * glowK));
+      g.addColorStop(0.28, rgba(glow, 0.55 * glowK));
+      g.addColorStop(0.65, rgba(glow, 0.25 * glowK));
+      g.addColorStop(1, rgba(glow, 0));
       const prevOp = ctx.globalCompositeOperation;
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = g;
@@ -148,8 +208,10 @@ export function drawLevelFxGround(ctx, fx, tr, w, h) {
       const rk = rt / ring.life;
       const rrScreen = r0Screen + (r1Screen - r0Screen) * (1 - Math.pow(1 - rk, 2.4));
       const rrWorld = rrScreen / tr.scale;
+      // Fade from glow -> core as the ring ages (rich edge, bright brink).
+      const ringRgb = lerpRgb(glow, core, rk);
       ctx.globalAlpha = (1 - rk) * 0.9;
-      ctx.strokeStyle = `hsl(45 95% ${62 + rk * 12}%)`;
+      ctx.strokeStyle = rgba(ringRgb, 1);
       // Stroke width lives in world units under the squashed transform;
       // divide by scale so the line stays at a stable ~4-6 CSS-px thickness.
       ctx.lineWidth = Math.max(viewMin * 0.006 * (1 - rk * 0.5), 1.2) / tr.scale;
@@ -169,13 +231,14 @@ export function drawLevelFxBillboard(ctx, fx, tr, w, h) {
     const sy = c.y * tr.scaleY + tr.ty;
     const rScreen = c.r * tr.scale;
 
-    // Milestone full-screen wash: peaks early and fades over ~0.55s.
+    // Milestone full-screen wash: peaks early and fades over ~0.55s. Tinted
+    // with the aura's core tone so the wash matches the current tier.
     if (c.milestone && !c.reducedMotion) {
       const peakAt = 0.14;
       const fade = 0.42;
       const flashK = Math.max(0, 1 - Math.abs(c.t - peakAt) / fade);
       if (flashK > 0) {
-        ctx.fillStyle = `rgba(255, 235, 165, ${0.32 * flashK})`;
+        ctx.fillStyle = rgba(c.aura.core, 0.34 * flashK);
         ctx.fillRect(0, 0, w, h);
       }
     }
@@ -193,15 +256,15 @@ export function drawLevelFxBillboard(ctx, fx, tr, w, h) {
     );
 
     if (!c.reducedMotion) {
-      drawPillar(ctx, sx, sy, wOuter, heightMax, k);
+      drawPillar(ctx, sx, sy, wOuter, heightMax, k, c.aura);
       drawSparkles(ctx, sx, sy, wOuter, heightMax, viewMin, c);
     }
-    drawLevelText(ctx, sx, sy, rScreen, heightMax, k, c.intensity, c.level, w, h);
+    drawLevelText(ctx, sx, sy, rScreen, heightMax, k, c.intensity, c.level, c.aura, w, h);
   }
   ctx.globalAlpha = 1;
 }
 
-function drawPillar(ctx, sx, sy, wOuter, heightMax, k) {
+function drawPillar(ctx, sx, sy, wOuter, heightMax, k, aura) {
   // Animation phases: rise → hold → dissolve-upward.
   let topY;
   let botY;
@@ -231,14 +294,18 @@ function drawPillar(ctx, sx, sy, wOuter, heightMax, k) {
   // Three vertical gradient rectangles at decreasing width and a canvas
   // blur filter for the horizontal fade — cheap and reads as a soft beam
   // without visible seams between concentric layers.
+  //   outer wide layer = aura glow (rich edge tone)
+  //   middle layer     = aura core (bright inner tone)
+  //   center line      = white-hot (unchanged — the beam's spine reads as
+  //                      pure light regardless of tier).
   const height = botY - topY;
 
   ctx.filter = `blur(${wOuter * 0.28}px)`;
-  ctx.fillStyle = pillarGradient(ctx, botY, topY, [255, 200, 90], 0.55 * alpha, 0.35 * alpha);
+  ctx.fillStyle = pillarGradient(ctx, botY, topY, aura.glow, 0.60 * alpha, 0.38 * alpha);
   ctx.fillRect(sx - wOuter * 0.55, topY, wOuter * 1.1, height);
 
   ctx.filter = `blur(${wOuter * 0.12}px)`;
-  ctx.fillStyle = pillarGradient(ctx, botY, topY, [255, 230, 140], 0.75 * alpha, 0.5 * alpha);
+  ctx.fillStyle = pillarGradient(ctx, botY, topY, aura.core, 0.80 * alpha, 0.55 * alpha);
   ctx.fillRect(sx - wOuter * 0.32, topY, wOuter * 0.64, height);
 
   ctx.filter = `blur(${Math.max(wOuter * 0.02, 1)}px)`;
@@ -260,6 +327,7 @@ function pillarGradient(ctx, botY, topY, rgb, topA, midA) {
 }
 
 function drawSparkles(ctx, sx, sy, wOuter, heightMax, viewMin, c) {
+  const { core, glow } = c.aura;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   for (const s of c.sparkles) {
@@ -271,9 +339,11 @@ function drawSparkles(ctx, sx, sy, wOuter, heightMax, viewMin, c) {
     const size = s.size * (viewMin * 0.008 + 3) * (1 - p * 0.4);
     const alpha = Math.min(1, p * 4) * (1 - p);
     const g = ctx.createRadialGradient(x, y, 0, x, y, size);
-    g.addColorStop(0, `rgba(255, 255, 235, ${alpha})`);
-    g.addColorStop(0.5, `rgba(255, 220, 130, ${alpha * 0.7})`);
-    g.addColorStop(1, 'rgba(255, 200, 90, 0)');
+    // White-hot center, aura core midway, aura glow at the edge — three
+    // stops so the sparkle reads the tier's palette at every distance.
+    g.addColorStop(0, `rgba(255, 255, 245, ${alpha})`);
+    g.addColorStop(0.5, rgba(core, alpha * 0.75));
+    g.addColorStop(1, rgba(glow, 0));
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -282,7 +352,7 @@ function drawSparkles(ctx, sx, sy, wOuter, heightMax, viewMin, c) {
   ctx.restore();
 }
 
-function drawLevelText(ctx, sx, sy, rScreen, heightMax, k, intensity, level, w, h) {
+function drawLevelText(ctx, sx, sy, rScreen, heightMax, k, intensity, level, aura, w, h) {
   // Base size scales with both the hole's on-screen radius AND the viewport
   // so the text is always big and readable — this is the hero element.
   const viewportRef = Math.min(w, h);
@@ -331,21 +401,40 @@ function drawLevelText(ctx, sx, sy, rScreen, heightMax, k, intensity, level, w, 
   ctx.globalAlpha = alpha;
   ctx.lineJoin = 'round';
 
+  // Aura outer glow: a fat, blurred stroke in the tier's glow tone under
+  // additive blending, so the title reads as radiating the aura's color.
+  // Drawn under the dark outline so the letters stay crisp.
+  const prevOp = ctx.globalCompositeOperation;
+  const prevFilter = ctx.filter;
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.filter = `blur(${Math.max(px * 0.14, 2)}px)`;
+  ctx.lineWidth = px * 0.42;
+  ctx.strokeStyle = rgba(aura.glow, 0.9);
+  ctx.strokeText(text, sx, anchorY);
+  // Second, tighter glow layer in the brighter core tone.
+  ctx.filter = `blur(${Math.max(px * 0.06, 1)}px)`;
+  ctx.lineWidth = px * 0.22;
+  ctx.strokeStyle = rgba(aura.core, 0.85);
+  ctx.strokeText(text, sx, anchorY);
+  ctx.filter = prevFilter;
+  ctx.globalCompositeOperation = prevOp;
+
   // Dark outer outline for pop against any background.
   ctx.lineWidth = px * 0.16;
   ctx.strokeStyle = 'rgba(24, 10, 42, 0.92)';
   ctx.strokeText(text, sx, anchorY);
 
-  // Bright inner outline.
+  // Bright inner outline hugging the letter shape.
   ctx.lineWidth = px * 0.05;
   ctx.strokeStyle = 'rgba(255, 250, 210, 0.9)';
   ctx.strokeText(text, sx, anchorY);
 
-  // Gold gradient fill with white top.
+  // White-core fill — the aura color reads on the outside, letters stay
+  // readable on the inside regardless of tier.
   const g = ctx.createLinearGradient(0, anchorY - px * 0.55, 0, anchorY + px * 0.55);
-  g.addColorStop(0.0, '#fff6c9');
-  g.addColorStop(0.45, '#ffd166');
-  g.addColorStop(1.0, '#f2951a');
+  g.addColorStop(0.0, '#ffffff');
+  g.addColorStop(0.55, '#fff6dc');
+  g.addColorStop(1.0, '#ffe6a8');
   ctx.fillStyle = g;
   ctx.fillText(text, sx, anchorY);
 

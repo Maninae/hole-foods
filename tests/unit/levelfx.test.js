@@ -2,7 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createLevelFx, spawnLevelUp, updateLevelFx, intensityForLevel, isMilestone,
+  auraForLevel, AURA_TIERS,
 } from '../../js/levelfx.js';
+
+function hexToRgb(h) {
+  const s = h.replace('#', '');
+  return [
+    parseInt(s.slice(0, 2), 16),
+    parseInt(s.slice(2, 4), 16),
+    parseInt(s.slice(4, 6), 16),
+  ];
+}
 
 test('createLevelFx returns an empty active pool', () => {
   const fx = createLevelFx();
@@ -99,4 +109,56 @@ test('regular celebrations spawn sparkles during the pillar life', () => {
   updateLevelFx(fx, 0.3);
   // Enough time has passed to spawn multiple sparkles.
   assert.ok(c.sparkles.length > 0, 'expected sparkles to spawn by t=0.3');
+});
+
+test('auraForLevel returns exact tier colors at each threshold', () => {
+  for (const tier of AURA_TIERS) {
+    const aura = auraForLevel(tier.from);
+    assert.deepEqual(aura.core, hexToRgb(tier.core),
+      `core mismatch at threshold ${tier.from}`);
+    assert.deepEqual(aura.glow, hexToRgb(tier.glow),
+      `glow mismatch at threshold ${tier.from}`);
+  }
+});
+
+test('auraForLevel interpolates smoothly between adjacent tiers', () => {
+  // Between tier@from=1 (#bfe5ff sky blue) and tier@from=6 (#7ec3ff azure),
+  // level 3 sits at t = (3-1)/(6-1) = 0.4. Midway ish; the returned RGB
+  // must lie strictly between the two endpoints.
+  const a = hexToRgb('#bfe5ff');
+  const b = hexToRgb('#7ec3ff');
+  const mid = auraForLevel(3);
+  for (let i = 0; i < 3; i++) {
+    const lo = Math.min(a[i], b[i]);
+    const hi = Math.max(a[i], b[i]);
+    assert.ok(mid.core[i] >= lo && mid.core[i] <= hi,
+      `core channel ${i} out of interpolation range: ${mid.core[i]} not in [${lo}, ${hi}]`);
+  }
+  // Exact LERP at t=0.4.
+  const expected = [
+    Math.round(a[0] + (b[0] - a[0]) * 0.4),
+    Math.round(a[1] + (b[1] - a[1]) * 0.4),
+    Math.round(a[2] + (b[2] - a[2]) * 0.4),
+  ];
+  assert.deepEqual(mid.core, expected);
+});
+
+test('auraForLevel clamps at both ends of the ladder', () => {
+  const first = AURA_TIERS[0];
+  const last = AURA_TIERS[AURA_TIERS.length - 1];
+  // Below the first threshold, colors clamp to the first tier.
+  assert.deepEqual(auraForLevel(0).core, hexToRgb(first.core));
+  assert.deepEqual(auraForLevel(-10).glow, hexToRgb(first.glow));
+  // Above the last threshold, colors clamp to the last tier (stay emerald).
+  assert.deepEqual(auraForLevel(60).core, hexToRgb(last.core));
+  assert.deepEqual(auraForLevel(9999).glow, hexToRgb(last.glow));
+});
+
+test('celebrations at different tiers carry different aura colors', () => {
+  const fx = createLevelFx();
+  spawnLevelUp(fx, 3, { x: 0, y: 0, r: 22 }); // sky-blue tier
+  spawnLevelUp(fx, 40, { x: 0, y: 0, r: 22 }); // gold tier
+  const [low, high] = fx.active;
+  // Different tiers must produce different core colors.
+  assert.notDeepEqual(low.aura.core, high.aura.core);
 });
