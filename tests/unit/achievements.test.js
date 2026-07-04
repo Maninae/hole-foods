@@ -99,6 +99,18 @@ test('capstone does NOT fire when only 17 of 18 are discovered', () => {
   assert.ok(!p.unlocked.has('all-themes'));
 });
 
+test('capstone self-heals: 18 persisted discoveries without the unlock fire on any ingest', () => {
+  // A save can hold all 18 discoveries but no all-themes unlock (partial
+  // write, hand-edited storage). The themes trigger reads the discovered
+  // set on every ingest, so the next event of ANY type repairs it.
+  const p = createProgress();
+  for (const t of THEMES) p.discovered.add(t.key);
+  assert.ok(!p.unlocked.has('all-themes'));
+  const u = ingest(p, { type: 'swallow', emoji: '🍓' });
+  assert.ok(u.some((e) => e.id === 'all-themes'));
+  assert.ok(p.unlocked.has('all-themes'));
+});
+
 test('swallowing a building emoji fires first-building; second building does not re-unlock', () => {
   const p = createProgress();
   const notBldg = ingest(p, { type: 'swallow', emoji: '🍓' });
