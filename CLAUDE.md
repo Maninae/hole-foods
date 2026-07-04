@@ -46,11 +46,21 @@ js/levelfx.js        MapleStory-style level-up celebration: ground glow +
                      the ground; owner feedback.
 js/format.js         fmtNum (HUD, compact ≥1e6) / fmtShort (floaters,
                      compact ≥1e4); BigInt-safe suffix ladder K…Dc
-js/achievements.js   headless achievements engine: declarative table
-                     (11 milestones + 18-theme discovery log), ingest(),
-                     versioned localStorage persistence
+js/achievements.js   headless achievements engine: ingest() + fixpoint
+                     over the DAG, versioned localStorage persistence
+                     (v2 = themes/unlocked/themeCycles). Table lives in
+                     js/achievements-table.js — ~25 nodes across 6
+                     branches (GRANDEUR/APPETITE/COMBO/EXPLORER/DEPTH/
+                     HOMECOMING) with requires:[] edges and (col,row)
+                     layout coords for the map
+js/achievements-table.js  the declarative graph: add a row here to
+                     add an achievement, nothing else to wire
 js/collection-ui.js  collection overlay + unlock banner DOM; queued
-                     banners, Escape/P capture while open
+                     banners, Escape/P capture while open, mounts the
+                     progression map
+js/progression-map.js  DOM node buttons + one SVG edge layer inside a
+                     pannable viewport; unlocked/available/locked states,
+                     click for popover with description + requires
 js/render.js         two passes for the pseudo-3D view:
                      GROUND (squashed by ISO_Y): ground → decals → hole
                      (pit→falling(clipped)→rim) → tease rings → fxWorld.
@@ -104,7 +114,16 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   theme from angle — don't couple them.
 - **Meta-progression:** achievements/discoveries persist in localStorage
   `holefoods.progress` (versioned JSON, no BigInt inside). newRun() must NOT
-  reset it; saves happen on unlock/pause/beforeunload, never per frame.
+  reset it; saves happen on unlock/pause/beforeunload, never per frame. The
+  current schema is v2 — {themes, achievements, themeCycles}. v1 saves
+  migrate cleanly (themeCycles empty; meadow:0 refires next frame). Never
+  rename/remove an achievement id — live saves in the wild refer to them.
+- **Requires-fixpoint:** the achievement graph is a DAG; each node can list
+  `requires: [ids]` and only unlocks once all prereqs are unlocked AND its
+  trigger fires. A single ingest sweeps to a fixpoint so a big event
+  (radius=huge, combo=×5) cascades a whole chain in dependency order. Keep
+  the ACHIEVEMENTS array in topological order — the table-integrity test
+  enforces both acyclicity and forward-only requires references.
 - **Balance is sim-tuned:** GROWTH_K and the oasis density constants were set
   by greedy-bot simulation (`npm run sim -- 12 <seed>`; cycle 1 ≈ 4 min
   greedy ≈ 5-8 min human, ~1.4-1.8x per cycle after). Re-run sims on 2-3
@@ -115,10 +134,11 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ## Testing
 
 ```
-npm test           # 109 unit tests (node --test tests/unit/*.test.js)
-npm run test:e2e   # 7 Playwright tests: real steering → swallow → growth,
+npm test           # 125 unit tests (node --test tests/unit/*.test.js)
+npm run test:e2e   # 9 Playwright tests: real steering → swallow → growth,
                    # pause/mute/best persistence, Cmd+Tab stuck-key,
-                   # collection overlay (Escape + P capture), mobile
+                   # collection overlay (Escape + P capture), HUD map
+                   # button flow, map DOM shape, mobile
 npm run sim -- 12  # headless greedy-bot balance sim (minutes, seed args)
 ```
 
