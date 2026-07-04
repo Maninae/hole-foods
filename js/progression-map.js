@@ -17,7 +17,9 @@ import { ACHIEVEMENTS } from './achievements-table.js';
 
 const NODE_SIZE = 54;    // circle diameter (matches the ≥44px tap-target rule)
 const COL_W = 130;       // horizontal spacing between tiers
-const ROW_H = 78;        // vertical spacing between lanes
+const ROW_H = 92;        // vertical spacing between lanes — roomy enough that
+                         // an AVAILABLE node's progress hint (label + hint
+                         // lane below the badge) never reaches the next row
 const PAD_X = 60;        // left/right padding inside the canvas
 const PAD_Y = 44;        // top/bottom padding
 const POPOVER_OFFSET = 6; // gap between node and popover
@@ -84,7 +86,7 @@ function shortLabel(node) {
     'themes-3': '3 biomes', 'themes-9': '9 biomes',   'all-themes': 'All 18',
     'full-cycle': 'Cycle I','cycle-2': 'Cycle II',
     'cycle-3': 'Cycle III', 'cycle-5': 'Cycle V',
-    'meadow-c1': 'Home II', 'meadow-c2': 'Home III',  'meadow-6c': 'Home ×6',
+    'meadow-c1': 'Meadow II', 'meadow-c2': 'Meadow III', 'meadow-6c': 'Meadow ×6',
     'first-building': 'Buildings',
   };
   return idAliases[node.id] ?? node.name;
@@ -193,10 +195,12 @@ export function createProgressionMap({ progress } = {}) {
     popover.querySelector('.pop-desc').textContent = node.description;
     const reqEl = popover.querySelector('.pop-req');
     if (state === 'locked' && node.requires.length > 0) {
+      // Join with a middot: achievement names may contain commas
+      // ("Meadow, Forever"), and a comma separator would read as two items.
       const missing = node.requires
         .filter((id) => !progress.unlocked.has(id))
         .map((id) => (ACHIEVEMENTS.find((x) => x.id === id) ?? { name: id }).name)
-        .join(', ');
+        .join(' · ');
       reqEl.textContent = `Requires: ${missing}`;
       reqEl.classList.remove('hidden');
     } else if (state === 'available') {
