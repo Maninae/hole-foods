@@ -12,6 +12,7 @@ import {
 } from './levelfx.js';
 import { createInput } from './input.js';
 import { createHud, saveBest } from './hud.js';
+import { themeAt, themeDisplayName } from './catalog.js';
 import { fmtShort } from './format.js';
 import * as audio from './audio.js';
 
@@ -111,7 +112,11 @@ function frame(nowMs) {
     updateFx(fx, dt);
     updateLevelFx(game.levelFx, dt);
     hud.update(dt, hole);
-    hud.setBand(bandAt(hole.x, hole.y));
+    {
+      const band = bandAt(hole.x, hole.y);
+      const theme = themeAt(hole.x, hole.y);
+      hud.setArea(`${band}|${theme.key}`, themeDisplayName(theme, band));
+    }
   } else if (game.mode === 'menu') {
     // Attract mode: drift over the world behind the title.
     game.time += dt;

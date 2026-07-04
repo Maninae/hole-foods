@@ -505,11 +505,16 @@ export function pointsFor(placedRadius) {
   return BigInt(Math.max(1, Math.round((placedRadius * placedRadius) / CONFIG.POINTS_DIV)));
 }
 
-// Roman-numeral suffix for cycled theme names: "Berry Meadow II" the second
-// time the pool wraps back around to it.
 const ROMAN = ['', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
-export function biomeDisplayName(band) {
+
+// Display name for a specific theme at a band's scale tier — the suffix marks
+// the cycle ("Winter Wonderland II" = the x6-scale ring), not repeat visits.
+export function themeDisplayName(theme, band) {
   const cycle = cycleForBand(band);
   const suffix = ROMAN[cycle] ?? ` ${cycle + 1}`;
-  return biomeForBand(band).name + suffix;
+  return theme.name + suffix;
+}
+
+export function biomeDisplayName(band) {
+  return themeDisplayName(biomeForBand(band), band);
 }

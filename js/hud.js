@@ -2,7 +2,7 @@
 // start/pause overlays, best-run persistence. No game rules here.
 
 import { holeProgress, sizeLabel } from './hole.js';
-import { biomeDisplayName } from './catalog.js';
+
 import { fmtNum } from './format.js';
 
 // Re-export so existing importers (main.js, tests) keep working; the
@@ -97,12 +97,14 @@ export function createHud() {
       }
     },
 
-    setBand(band) {
-      if (band === hud.shownBand) return;
+    // Keyed on the theme CELL (band + theme), not just the band — the
+    // patchwork means walking sideways can change areas too.
+    setArea(key, name) {
+      if (key === hud.shownBand) return;
       const isFirst = hud.shownBand === null;
-      hud.shownBand = band;
+      hud.shownBand = key;
       if (isFirst) return; // no toast for the spawn biome
-      refs.toast.textContent = biomeDisplayName(band);
+      refs.toast.textContent = name;
       refs.toast.classList.remove('hidden');
       repop(refs.toast, 'slide');
       clearTimeout(hud.toastTimer);
