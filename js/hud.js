@@ -3,51 +3,13 @@
 
 import { levelProgress, sizeLabel } from './hole.js';
 import { biomeDisplayName } from './catalog.js';
+import { fmtNum } from './format.js';
+
+// Re-export so existing importers (main.js, tests) keep working; the
+// implementation lives in format.js alongside fmtShort for floaters.
+export { fmtNum, fmtShort } from './format.js';
 
 const BEST_KEY = 'holefoods.best';
-
-// Big scores read as "56.0M", not a 9-digit wall. Accepts Number or BigInt.
-// Ladder goes past standard NumberFormat (which caps at Q for quadrillion and
-// gets flaky past ~1e21); we walk a suffix table and, past Dc (1e33), fall
-// back to mantissa + exponent so any BigInt magnitude renders.
-//
-// Uses digit-string math throughout so BigInt tier selection is exact — never
-// round-trip a huge BigInt through Number to pick its tier.
-const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc'];
-
-function fmtCompactFromDigits(digits) {
-  const tier = Math.floor((digits.length - 1) / 3);
-  if (tier >= SUFFIXES.length) {
-    // Beyond Dc: mantissa (one decimal) + exponent, e.g. "3.4e38".
-    const exp = digits.length - 1;
-    const first = digits[0];
-    const dec = digits[1] ?? '0';
-    return `${first}.${dec}e${exp}`;
-  }
-  // Within a tier: 1–3 integer digits, then one truncated decimal, then suffix.
-  const intLen = digits.length - tier * 3;
-  const intPart = digits.slice(0, intLen);
-  const decDigit = digits[intLen] ?? '0';
-  return `${intPart}.${decDigit}${SUFFIXES[tier]}`;
-}
-
-export function fmtNum(n) {
-  if (typeof n === 'bigint') {
-    // Small enough to safely convert to Number for grouping.
-    if (n >= 0n && n < 1000000n) return Number(n).toLocaleString('en-US');
-    if (n < 0n && n > -1000000n) return Number(n).toLocaleString('en-US');
-    // Negative BigInts aren't a scoring case, but handle them defensively.
-    const sign = n < 0n ? '-' : '';
-    const digits = (n < 0n ? -n : n).toString();
-    return sign + fmtCompactFromDigits(digits);
-  }
-  if (n < 1e6) return Math.round(n).toLocaleString('en-US');
-  // Take a fixed-notation digit string of the Number so the same value in
-  // BigInt or Number form runs through the same tier logic and comes out the
-  // same. `toFixed(0)` handles the >1e21 range where `.toString()` flips to
-  // scientific — precision is display-only.
-  return fmtCompactFromDigits(n.toFixed(0));
-}
 
 export function loadBest() {
   try {

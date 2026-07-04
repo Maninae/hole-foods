@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fmtNum } from '../../js/hud.js';
+import { fmtNum, fmtShort } from '../../js/format.js';
 
 test('sub-million: locale grouping, rounded', () => {
   assert.equal(fmtNum(0), '0');
@@ -54,4 +54,14 @@ test('Number and BigInt inputs for the same value produce the same string', () =
   ]) {
     assert.equal(fmtNum(n), fmtNum(big), `mismatch at ${big}`);
   }
+});
+
+test('fmtShort compacts from five digits for point floaters', () => {
+  assert.equal(fmtShort(9999), '9,999');
+  assert.equal(fmtShort(20455), '20.5K');
+  assert.equal(fmtShort(20455n), '20.5K');
+  assert.equal(fmtShort(3200000), '3.2M');
+  assert.equal(fmtShort(586200000000n), '586.2B');
+  assert.equal(fmtShort(412), '412');
+  assert.equal(fmtShort(999950), '1.0M'); // rounding carries into the next tier
 });
