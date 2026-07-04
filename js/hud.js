@@ -1,7 +1,7 @@
 // DOM HUD: score, level ring, size label, combo indicator, biome toast,
 // start/pause overlays, best-run persistence. No game rules here.
 
-import { levelProgress, sizeLabel } from './hole.js';
+import { holeProgress, sizeLabel } from './hole.js';
 import { biomeDisplayName } from './catalog.js';
 import { fmtNum } from './format.js';
 
@@ -79,7 +79,7 @@ export function createHud() {
       }
       refs.score.textContent = fmtNum(hud.displayScore);
       refs.levelBadge.textContent = hole.level;
-      refs.levelFill.style.width = `${(levelProgress(hole.r) * 100).toFixed(1)}%`;
+      refs.levelFill.style.width = `${(holeProgress(hole) * 100).toFixed(1)}%`;
       refs.sizeLabel.textContent = sizeLabel(hole.r);
     },
 

@@ -11,7 +11,7 @@ import { drawGround } from './ground.js';
 import { forEachChunkInRect } from './world.js';
 import { drawEmoji } from './sprites.js';
 import { fallingVisual } from './swallow.js';
-import { levelProgress } from './hole.js';
+import { holeProgress } from './hole.js';
 import { drawFxWorld, drawFxText } from './particles.js';
 import { drawLevelFxGround, drawLevelFxBillboard } from './levelfx.js';
 import { CONFIG } from './config.js';
@@ -107,7 +107,7 @@ function drawHole(ctx, hole, sw, time, screenScale, zoom) {
   // as the hole approaches its next size milestone. Drawn in the ground pass
   // so it hugs the rim ellipse like everything else. Width scales with the
   // hole so it stays ~4-6 screen px at any zoom (like the rim itself).
-  const progress = levelProgress(r);
+  const progress = holeProgress(hole);
   // Never thinner than ~4.5 CSS px, whatever the zoom — a just-leveled hole
   // must still show a readable (mostly empty) meter.
   const meterW = Math.max(lw * 1.1, r * 0.075, 4.5 / zoom);

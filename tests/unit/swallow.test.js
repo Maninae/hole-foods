@@ -46,7 +46,7 @@ test('an object over the hole tips in and is consumed after FALL_TIME', () => {
   assert.equal(swallowEvents.length, 1);
   assert.equal(swallowEvents[0].points, obj.points);
   assert.equal(hole.score, obj.points);
-  assert.ok(hole.r > r0, 'hole should grow');
+  assert.ok(hole.potential > r0, 'growth potential should rise');
   assert.ok(world.eaten.get('0:0,0').has(0), 'eaten set should record it');
   assert.equal(world.chunks.get('0:0,0').objects.length, 0);
 });

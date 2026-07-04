@@ -136,7 +136,7 @@ test('desktop: boots clean, plays, swallows, grows', async () => {
     r: window.__game.hole.r,
     eaten: window.__game.hole.eatenCount,
   }));
-  assert.ok(after1.r > r0, `hole did not grow: ${after1.r} <= ${r0}`);
+  assert.ok(after1.potential > r0, `potential did not grow: ${after1.potential} <= ${r0}`);
   assert.ok(after1.eaten >= 1);
 
   // Pause via keyboard, resume via button.

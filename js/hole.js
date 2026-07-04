@@ -8,11 +8,19 @@ export function createHole() {
   return {
     x: 0, y: 0,
     vx: 0, vy: 0,
-    r: CONFIG.HOLE_R0,
+    r: CONFIG.HOLE_R0,          // DISCRETE: always exactly radiusForLevel(level)
+    potential: CONFIG.HOLE_R0,  // continuous growth accumulator (area-based)
     level: 1,
     score: 0n,
     eatenCount: 0,
   };
+}
+
+// The predetermined size ladder: level n mouths exactly this radius. The
+// 1.22x steps (~49% more area per level) are what make a level-up feel like
+// a real unlock — new items become swallowable all at once.
+export function radiusForLevel(n) {
+  return CONFIG.HOLE_R0 * Math.pow(CONFIG.LEVEL_R_GROWTH, n - 1);
 }
 
 export function levelForRadius(r) {
@@ -47,13 +55,28 @@ export function updateHole(hole, dt, dir) {
 // level-up info. Radius/level math stays Number — scale-free growth cares
 // about ratios, not exactness — but score is authoritative BigInt.
 export function eat(hole, s, points) {
-  hole.r = Math.sqrt(hole.r * hole.r + CONFIG.GROWTH_K * s * s);
+  // Growth feeds the POTENTIAL; the visible radius only moves when a
+  // milestone is crossed, snapping exactly to the ladder (possibly several
+  // levels at once on a huge meal).
+  hole.potential = Math.sqrt(hole.potential * hole.potential + CONFIG.GROWTH_K * s * s);
   hole.score += points;
   hole.eatenCount++;
-  const newLevel = levelForRadius(hole.r);
+  const newLevel = levelForRadius(hole.potential);
   const leveledUp = newLevel > hole.level;
-  hole.level = newLevel;
+  if (leveledUp) {
+    hole.level = newLevel;
+    hole.r = radiusForLevel(newLevel);
+  }
   return { leveledUp, newLevel };
+}
+
+// Fraction of the way to the next ladder size, in swallowed-area terms —
+// what the rim meter and HUD bar display.
+export function holeProgress(hole) {
+  const cur = radiusForLevel(hole.level) ** 2;
+  const next = radiusForLevel(hole.level + 1) ** 2;
+  const p = (hole.potential * hole.potential - cur) / (next - cur);
+  return Math.min(0.999999, Math.max(0, p));
 }
 
 // Hole diameter as a friendly size: 1 world unit = 1 cm.
