@@ -31,11 +31,11 @@ Pin a world with `?seed=anything` — the same seed reproduces the same terrain 
 
 - **Rim physics, not vacuum.** Objects sit inert until your edge slides under them. Past 30% overhang they teeter; past 50% their center loses support and they tip in. No long-range attraction anywhere.
 - **Isometric ground plane.** The world is drawn in a shallow pseudo-3D: the ground Y-squashes to 0.72, the hole reads as an ellipse, everything else stands upright on it and y-sorts behind you.
-- **Discrete size ladder.** Your radius always sits exactly on the ladder — 22 cm to boundless in ×1.22 steps (roughly +49% area per rung). Each level-up unlocks a whole row of new-to-you edibles at once.
+- **Discrete size ladder.** Your radius always sits exactly on the ladder — 26 cm to boundless in ×1.22 steps (roughly +49% area per rung). Each level-up unlocks a whole row of new-to-you edibles at once.
 - **Level-up celebration.** Expanding aura, ground rings, a sky-piercing pillar, and an overshooting "LEVEL UP! N" title. The color climbs a ladder as you level: sky-blue → azure → lavender → royal purple → yellow → **gold** → pale green → emerald. Every 10th level adds a full-screen wash.
 - **Oasis/desert distribution.** Food comes in 3×3-chunk patches. An oasis is a rich cluster of a single theme's items; between them you cross sparse ground with the odd giant sighting until the next cluster.
 - **Angular patchwork world.** 18 themes tile the world as roughly-square angular sectors — walk sideways and you cross into a different theme without leaving your size band. Only distance from origin decides the scale tier; angle decides the theme.
-- **Fractal endless scaling.** Every 6 bands the world's size multiplier steps ×6 — biome widths, chunk sizes, item radii, and camera zoom all scale together. Play stays identical at 44 cm, 44 m, and 44 km.
+- **Fractal endless scaling.** Every 6 bands the world's size multiplier steps ×6 — biome widths, chunk sizes, item radii, and camera zoom all scale together. Play stays identical at 53 cm, 53 m, and 53 km.
 - **BigInt scoring.** Score is exact-integer end-to-end (BigInt in code, `56.0M`/`4.2B`-style in the HUD). No wraparound at any depth.
 - **Sticker collection + achievement map.** First visit to each of the 18 themes earns its sticker; a skill-tree map of ~25 chained achievements sits alongside (six branches, gold edges lighting up as you unlock each rung). Progress persists across runs — open 🗺️ Collection from the start screen, pause panel, or the HUD map button during play.
 - **Keys / touch only.** No mouse-tracking, no auto-aim. Arrow keys, WASD, or touch drag.
