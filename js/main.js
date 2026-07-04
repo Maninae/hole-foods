@@ -11,7 +11,8 @@ import {
   createLevelFx, spawnLevelUp, updateLevelFx, intensityForLevel, isMilestone,
 } from './levelfx.js';
 import { createInput } from './input.js';
-import { createHud, saveBest, fmtNum } from './hud.js';
+import { createHud, saveBest } from './hud.js';
+import { fmtShort } from './format.js';
 import * as audio from './audio.js';
 
 const canvas = document.getElementById('game');
@@ -63,7 +64,7 @@ function handleEvents(events) {
       // Cap point floaters so combo frenzies don't wall the screen with text.
       if (fx.floats.length < 7 || ev.big) {
         const jx = (Math.random() - 0.5) * hole.r * 1.6; // spread stacked floaters
-        floatText(fx, hole.x + jx, hole.y - hole.r * 1.4, `+${fmtNum(ev.points)}`, {
+        floatText(fx, hole.x + jx, hole.y - hole.r * 1.4, `+${fmtShort(ev.points)}`, {
           size: hole.r * 0.5,
           hue: ev.mult > 1 ? 43 : 0,
           sat: ev.mult > 1 ? 95 : 0,
