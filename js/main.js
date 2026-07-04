@@ -42,8 +42,11 @@ const game = {
   cam: createCamera(),
   time: 0,
   progress: loadProgress(),  // meta-progression — survives newRun() and reload
-  shownTheme: null,          // last theme key we notified the engine of
+  shownThemeCycle: null,     // last "theme:cycle" we notified the engine of
   shownCycle: -1,            // last cycle we notified the engine of
+  // Set when the HUD 🗺️ button pauses play to open the collection —
+  // closing the overlay auto-resumes instead of dropping to the pause panel.
+  resumeAfterCollection: false,
 };
 
 // Persist meta-progression whenever a new unlock lands (writes are cheap and
@@ -54,6 +57,16 @@ const collectionUI = createCollectionUI({
   progress: game.progress,
   reducedMotion,
   onPing: () => audio.unlockPing(),
+  onClose: () => {
+    // Only auto-resume when the overlay was opened over live play via the
+    // HUD map button. Opened from start/pause, we drop back into that
+    // screen — no mode change needed here.
+    if (game.resumeAfterCollection) {
+      game.resumeAfterCollection = false;
+      game.mode = 'playing';
+      audio.uiClick();
+    }
+  },
 });
 
 // Feed a batch of unlock entries: banner + persist. `applyUnlocks` never
@@ -75,7 +88,7 @@ function newRun() {
   hud.displayScore = 0;
   // Meta-progression (progress) is intentionally NOT touched here — it's the
   // whole point of the discovery log surviving run restarts.
-  game.shownTheme = null;
+  game.shownThemeCycle = null;
   game.shownCycle = -1;
 }
 newRun();
@@ -151,13 +164,19 @@ function frame(nowMs) {
     {
       const band = bandAt(hole.x, hole.y);
       const theme = themeAt(hole.x, hole.y);
-      hud.setArea(`${band}|${theme.key}`, themeDisplayName(theme, band));
-      // Achievements: theme visits (dedupe by key) + cycle crossings.
-      if (theme.key !== game.shownTheme) {
-        game.shownTheme = theme.key;
-        applyUnlocks(ingest(game.progress, { type: 'themeVisit', key: theme.key }));
-      }
       const cycle = cycleForBand(band);
+      hud.setArea(`${band}|${theme.key}`, themeDisplayName(theme, band));
+      // Achievements: re-emit themeVisit whenever EITHER the theme OR the
+      // cycle changes — the engine records the (theme, cycle) pair, and
+      // the HOMECOMING branch reacts to meadow at higher cycles even when
+      // the raw theme key hasn't changed.
+      const themeCycleKey = `${theme.key}:${cycle}`;
+      if (themeCycleKey !== game.shownThemeCycle) {
+        game.shownThemeCycle = themeCycleKey;
+        applyUnlocks(ingest(game.progress, {
+          type: 'themeVisit', key: theme.key, cycle,
+        }));
+      }
       if (cycle !== game.shownCycle) {
         game.shownCycle = cycle;
         applyUnlocks(ingest(game.progress, { type: 'cycle', cycle }));
@@ -216,14 +235,31 @@ document.getElementById('btn-play').addEventListener('click', startRun);
 document.getElementById('btn-pause').addEventListener('click', pauseGame);
 document.getElementById('btn-resume').addEventListener('click', resumeGame);
 
-// Collection overlay is reachable from both the start screen and the pause
-// panel. It stacks over whichever overlay is showing; closing returns to it.
+// Collection overlay is reachable from three places:
+//   - start / pause screens: opening from menu or paused mode leaves the
+//     mode alone, and closing drops back into that screen naturally.
+//   - HUD 🗺️ button during live play: pause the sim (best-run save
+//     included, but WITHOUT showing the pause panel), and set the
+//     resume-flag so closing the overlay returns straight to playing.
 for (const id of ['btn-collection-start', 'btn-collection-pause']) {
   document.getElementById(id).addEventListener('click', () => {
     audio.uiClick();
     collectionUI.open();
   });
 }
+
+document.getElementById('btn-map').addEventListener('click', () => {
+  audio.uiClick();
+  if (game.mode === 'playing') {
+    // Pause without showing the pause panel — the collection overlay is
+    // the visible modal instead. Keep best-run + progress writes in sync.
+    game.mode = 'paused';
+    saveBest(game.hole);
+    saveMeta();
+    game.resumeAfterCollection = true;
+  }
+  collectionUI.open();
+});
 
 const btnRestart = document.getElementById('btn-restart');
 let restartArmed = false;

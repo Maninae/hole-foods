@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/ui.css">
   <link rel="stylesheet" href="css/collection.css">
+  <link rel="stylesheet" href="css/map.css">
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -31,6 +32,7 @@
     </div>
     <div id="score">0</div>
     <div class="hud-right">
+      <button id="btn-map" aria-label="Open collection">🗺️</button>
       <button id="btn-mute" aria-label="Toggle sound">🔊</button>
       <button id="btn-pause" aria-label="Pause">⏸</button>
     </div>
@@ -83,12 +85,12 @@
         </div>
         <div class="sticker-grid" id="sticker-grid"></div>
       </section>
-      <section class="collection-section">
+      <section class="collection-section map-section">
         <div class="collection-heading">
           <h3>Achievements</h3>
           <span class="collection-progress" id="collection-progress-achievements">0 / 0</span>
         </div>
-        <ul class="achievement-list" id="achievement-list"></ul>
+        <div id="achievement-map"></div>
       </section>
     </div>
   </div>

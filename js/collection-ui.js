@@ -4,20 +4,17 @@
 // stays live-updated by the engine.
 
 import { ACHIEVEMENTS, THEMES_ORDER } from './achievements.js';
+import { createProgressionMap } from './progression-map.js';
 
 const BANNER_HOLD_MS = 2400;         // time each unlock stays visible
 const BANNER_GAP_MS = 220;           // gap between queued unlocks
 
 function el(id) { return document.getElementById(id); }
 
-// Render the sticker grid and achievement list from the current progress.
-function paint(refs, progress) {
+// Render the sticker grid and refresh the progression map from the current
+// progress. Called on every open — cheap enough (~18 stickers, ~25 nodes).
+function paint(refs, progress, map) {
   const grid = refs.stickerGrid;
-  const list = refs.achievementList;
-
-  // Diff-free: it's an 18-slot grid and ~11 achievements — a total rerender
-  // is cheaper (in reasoning) than tracking per-cell state. It runs only
-  // when the overlay opens, not per frame.
   grid.textContent = '';
   for (const theme of THEMES_ORDER) {
     const unlocked = progress.discovered.has(theme.key);
@@ -33,29 +30,11 @@ function paint(refs, progress) {
     grid.append(cell);
   }
 
-  list.textContent = '';
-  for (const a of ACHIEVEMENTS) {
-    const unlocked = progress.unlocked.has(a.id);
-    const li = document.createElement('li');
-    li.className = `achievement ${unlocked ? 'unlocked' : 'locked'}`;
-    const em = document.createElement('div');
-    em.className = 'achievement-emoji';
-    em.textContent = unlocked ? a.emoji : '🔒';
-    const body = document.createElement('div');
-    body.className = 'achievement-body';
-    const name = document.createElement('div');
-    name.className = 'achievement-name';
-    name.textContent = a.name;
-    const desc = document.createElement('div');
-    desc.className = 'achievement-desc';
-    desc.textContent = a.description;
-    body.append(name, desc);
-    li.append(em, body);
-    list.append(li);
-  }
+  map.refresh();
 
   refs.progressThemes.textContent = `${progress.discovered.size} / ${THEMES_ORDER.length}`;
-  refs.progressAchievements.textContent = `${progress.unlocked.size} / ${ACHIEVEMENTS.length}`;
+  refs.progressAchievements.textContent =
+    `${progress.unlocked.size} / ${ACHIEVEMENTS.length}`;
 }
 
 // Escape/P-to-close is captured on document so it beats window-level pause
@@ -77,13 +56,17 @@ function installEscapeCloser(overlay, closeFn) {
 // reference (from achievements.createProgress / loadProgress) that the
 // engine mutates as events land — we simply repaint on open.
 //
-// `onPing` fires when an unlock banner appears (audio cue hook).
+// `onPing`   fires when an unlock banner appears (audio cue hook).
+// `onClose`  fires after the overlay is closed (main.js uses it to resume
+//            play if the overlay was opened from the in-game HUD button).
 // `reducedMotion` skips the ribbon-in animation.
-export function createCollectionUI({ progress, reducedMotion = false, onPing = null } = {}) {
+export function createCollectionUI({
+  progress, reducedMotion = false, onPing = null, onClose = null,
+} = {}) {
   const refs = {
     overlay: el('collection'),
     stickerGrid: el('sticker-grid'),
-    achievementList: el('achievement-list'),
+    mapMount: el('achievement-map'),
     progressThemes: el('collection-progress-themes'),
     progressAchievements: el('collection-progress-achievements'),
     btnClose: el('btn-collection-close'),
@@ -92,6 +75,9 @@ export function createCollectionUI({ progress, reducedMotion = false, onPing = n
     bannerName: el('unlock-banner').querySelector('.unlock-name'),
     bannerEyebrow: el('unlock-banner').querySelector('.unlock-eyebrow'),
   };
+
+  const map = createProgressionMap({ progress });
+  refs.mapMount.appendChild(map.root);
 
   const state = {
     isOpen: false,
@@ -102,7 +88,7 @@ export function createCollectionUI({ progress, reducedMotion = false, onPing = n
 
   function open() {
     if (state.isOpen) return;
-    paint(refs, progress);
+    paint(refs, progress, map);
     refs.overlay.classList.remove('hidden');
     refs.overlay.setAttribute('aria-hidden', 'false');
     state.isOpen = true;
@@ -110,9 +96,11 @@ export function createCollectionUI({ progress, reducedMotion = false, onPing = n
 
   function close() {
     if (!state.isOpen) return;
+    map.closePopover();
     refs.overlay.classList.add('hidden');
     refs.overlay.setAttribute('aria-hidden', 'true');
     state.isOpen = false;
+    onClose?.();
   }
 
   function nextBanner() {
@@ -146,7 +134,9 @@ export function createCollectionUI({ progress, reducedMotion = false, onPing = n
 
   function showUnlock(entry) {
     state.queue.push(entry);
-    // Kick the drain if nothing is currently on-screen.
+    // Refresh the map so newly unlocked nodes light up while the overlay
+    // is open (banner-driven repaints during unlock cascades).
+    if (state.isOpen) map.refresh();
     if (state.activeTimer == null && state.gapTimer == null) nextBanner();
   }
 
