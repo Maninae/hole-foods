@@ -58,12 +58,14 @@ function paint(refs, progress) {
   refs.progressAchievements.textContent = `${progress.unlocked.size} / ${ACHIEVEMENTS.length}`;
 }
 
-// Escape-to-close is captured on document so it beats window-level pause
-// handling (input.js listens on window). We only steal the key while the
-// overlay is open — otherwise Escape keeps pausing / resuming as before.
+// Escape/P-to-close is captured on document so it beats window-level pause
+// handling (input.js listens on window). We only steal the keys while the
+// overlay is open — otherwise both keep pausing / resuming as before. P must
+// be stolen too: letting it bubble would toggle pause→playing with the modal
+// still up, leaving the player steering underneath it.
 function installEscapeCloser(overlay, closeFn) {
   document.addEventListener('keydown', (e) => {
-    if (e.code !== 'Escape') return;
+    if (e.code !== 'Escape' && e.code !== 'KeyP') return;
     if (overlay.classList.contains('hidden')) return;
     e.stopPropagation();
     e.preventDefault();

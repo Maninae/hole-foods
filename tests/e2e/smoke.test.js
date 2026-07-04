@@ -255,6 +255,30 @@ test('collection overlay opens from start screen and closes with Escape', async 
   await page.close();
 });
 
+test('P while the collection overlay is open closes it without resuming play', async () => {
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(URL);
+  await page.waitForLoadState('networkidle');
+  await page.click('#btn-play');
+  await page.keyboard.press('KeyP');
+  assert.equal(await page.evaluate(() => window.__game.mode), 'paused');
+
+  await page.click('#btn-collection-pause');
+  assert.ok(!(await page.evaluate(
+    () => document.getElementById('collection').classList.contains('hidden'),
+  )), 'overlay should be visible after clicking Collection on pause screen');
+
+  // P is the pause toggle; with the modal up it must close the modal and
+  // leave the game paused — never resume play underneath the overlay.
+  await page.keyboard.press('KeyP');
+  assert.ok(await page.evaluate(
+    () => document.getElementById('collection').classList.contains('hidden'),
+  ), 'overlay should close on P');
+  assert.equal(await page.evaluate(() => window.__game.mode), 'paused');
+  await page.close();
+});
+
 test('mobile (iPhone 13): boots clean, no horizontal overflow, play starts', async () => {
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
