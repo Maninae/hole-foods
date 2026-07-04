@@ -11,16 +11,19 @@ binary assets — emoji are the art, WebAudio synthesizes the sound. Serve with
 index.html           shell; ES module entry
 css/base.css         design tokens, canvas scaffold, vignette
 css/ui.css           HUD, overlays, buttons, micro-animations
+css/collection.css   collection overlay + unlock banner styles
 js/config.js         ALL tuning numbers — change gameplay feel here only
 js/rng.js            xmur3+mulberry32 seeded PRNG; chunkRng(seed,cx,cy,salt)
-js/catalog.js        6 biomes × item tables (emoji, base radius, weight, hue),
-                     band/cycle math, pointsFor
+js/catalog.js        18 themes × slot-normalized item tables (emoji, radius,
+                     weight, hue), geometric band/cycle math, angular
+                     patchwork tiling (themeAt/sectorCount), pointsFor→BigInt
 js/patterns.js       cluster layouts: ring/doubleRing/grid/spiral/arc/blob (pure)
 js/world.js          FRACTAL chunk lifecycle: chunk size scales x6 per biome
                      cycle (leveled grids), deterministic generation, eaten-set
                      persistence, LOD level skipping, spatial queries
-js/hole.js           player state: easing movement, area-accumulation growth,
-                     radius-milestone levels, sizeLabel
+js/hole.js           player state: easing movement, DISCRETE size ladder
+                     (r snaps to radiusForLevel; potential accumulates
+                     between rungs), holeProgress, sizeLabel
 js/swallow.js        vacuum pull, tip-in fall state machine, combo + scoring;
                      emits events (pure — presentation reacts to events)
 js/camera.js         eased follow + lookahead, size-driven zoom, shake (pure)
@@ -36,7 +39,18 @@ js/particles.js      suck-burst / confetti / floaters / rings pools;
 js/levelfx.js        MapleStory-style level-up celebration: ground glow +
                      ring pulses (world), pillar + sparkles + big overshoot
                      "LEVEL UP! N" text (screen). Escalates with level;
-                     every 10 levels adds a full-screen wash.
+                     every 10 levels adds a full-screen wash. AURA_TIERS
+                     color ladder (sky→azure→lavender→royal→yellow→gold→
+                     pale-green→emerald, lerped). Celebrations FOLLOW the
+                     hole (live x/y/r getters) — never re-anchor them to
+                     the ground; owner feedback.
+js/format.js         fmtNum (HUD, compact ≥1e6) / fmtShort (floaters,
+                     compact ≥1e4); BigInt-safe suffix ladder K…Dc
+js/achievements.js   headless achievements engine: declarative table
+                     (11 milestones + 18-theme discovery log), ingest(),
+                     versioned localStorage persistence
+js/collection-ui.js  collection overlay + unlock banner DOM; queued
+                     banners, Escape/P capture while open
 js/render.js         two passes for the pseudo-3D view:
                      GROUND (squashed by ISO_Y): ground → decals → hole
                      (pit→falling(clipped)→rim) → tease rings → fxWorld.
@@ -81,7 +95,16 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   under them (overhang > 0), teeter below 0.5, tip at 0.5. Never reintroduce
   long-range attraction — it was removed on purpose (owner feedback).
 - **Score is BigInt** end-to-end (pointsFor → events → hole.score → storage
-  as string). Never mix it into Number arithmetic; format via hud.fmtNum.
+  as string). Never mix it into Number arithmetic; format via js/format.js.
+- **Discrete size ladder:** hole.r is always exactly radiusForLevel(level) =
+  22·1.22^(level−1); eating grows hole.potential, and level-up snaps r to the
+  next rung (possibly several at once). Never let r drift off-ladder.
+- **Patchwork themes:** themeAt(x,y) is deterministic and seed-independent;
+  band 0 is always Berry Meadow. Scale tier comes from distance (bands),
+  theme from angle — don't couple them.
+- **Meta-progression:** achievements/discoveries persist in localStorage
+  `holefoods.progress` (versioned JSON, no BigInt inside). newRun() must NOT
+  reset it; saves happen on unlock/pause/beforeunload, never per frame.
 - **Balance is sim-tuned:** GROWTH_K and the oasis density constants were set
   by greedy-bot simulation (`npm run sim -- 12 <seed>`; cycle 1 ≈ 4 min
   greedy ≈ 5-8 min human, ~1.4-1.8x per cycle after). Re-run sims on 2-3
@@ -92,9 +115,10 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ## Testing
 
 ```
-npm test           # 64 unit tests (node --test tests/unit/*.test.js)
-npm run test:e2e   # 5 Playwright tests: real steering → swallow → growth,
-                   # pause/mute/best persistence, Cmd+Tab stuck-key, mobile
+npm test           # 109 unit tests (node --test tests/unit/*.test.js)
+npm run test:e2e   # 7 Playwright tests: real steering → swallow → growth,
+                   # pause/mute/best persistence, Cmd+Tab stuck-key,
+                   # collection overlay (Escape + P capture), mobile
 npm run sim -- 12  # headless greedy-bot balance sim (minutes, seed args)
 ```
 
@@ -119,6 +143,8 @@ artifacts in tests/e2e/artifacts/ are gitignored).
 - Scores go compact past 1M (`fmtNum`: "56.0M") in HUD and floaters.
 - Score floaters are capped (7 live) so ×5 combo frenzies don't wall the
   screen with text.
+- GitHub Pages: keep `.nojekyll` — without it Pages runs a Jekyll build that
+  errors/wedges on this repo and deploys stall for hours.
 
 ## Design doc
 
