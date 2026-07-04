@@ -221,6 +221,40 @@ test('Cmd+Tab does not leave a movement key stuck', async () => {
   await page.close();
 });
 
+test('collection overlay opens from start screen and closes with Escape', async () => {
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // Fresh page each test — force no persisted progress so we get the
+  // "0 / 18" locked-state layout.
+  await page.addInitScript(() => localStorage.removeItem('holefoods.progress'));
+  await page.goto(URL);
+  await page.waitForLoadState('networkidle');
+
+  // Overlay starts hidden.
+  assert.ok(await page.evaluate(
+    () => document.getElementById('collection').classList.contains('hidden'),
+  ));
+  await page.click('#btn-collection-start');
+  assert.ok(!(await page.evaluate(
+    () => document.getElementById('collection').classList.contains('hidden'),
+  )), 'overlay should be visible after clicking Collection');
+
+  // 18 sticker slots rendered.
+  const stickers = await page.evaluate(
+    () => document.querySelectorAll('#sticker-grid .sticker').length,
+  );
+  assert.equal(stickers, 18);
+
+  // Escape closes the overlay without triggering pause (game is in menu mode
+  // anyway, so we assert mode stays 'menu' and overlay is hidden).
+  await page.keyboard.press('Escape');
+  assert.ok(await page.evaluate(
+    () => document.getElementById('collection').classList.contains('hidden'),
+  ));
+  assert.equal(await page.evaluate(() => window.__game.mode), 'menu');
+  await page.close();
+});
+
 test('mobile (iPhone 13): boots clean, no horizontal overflow, play starts', async () => {
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
