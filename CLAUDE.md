@@ -24,7 +24,7 @@ js/hole.js           player state: easing movement, area-accumulation growth,
 js/swallow.js        vacuum pull, tip-in fall state machine, combo + scoring;
                      emits events (pure — presentation reacts to events)
 js/camera.js         eased follow + lookahead, size-driven zoom, shake (pure)
-js/input.js          mouse hover-steer / touch drag / WASD → {x,y,mag}
+js/input.js          keyboard steer (WASD/arrows) + touch drag → {x,y,mag}
 js/audio.js          WebAudio synth: pop/gulp/combo/levelup/ambient; mute persists
 js/sprites.js        emoji → offscreen-canvas cache, size buckets ≤1024px;
                      bigger draws fall back to direct fillText (stays crisp)

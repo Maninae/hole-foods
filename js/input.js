@@ -1,5 +1,5 @@
-// Input: mouse hover-steer, touch drag, WASD/arrow keys. Produces a single
-// {x, y, mag} direction each frame; keyboard wins over pointer when held.
+// Input: keyboard steer (WASD/arrows) + touch drag → {x, y, mag}. Desktop is
+// keyboard-only by design; touch stays because phones have no arrow keys.
 
 import { screenToWorld } from './camera.js';
 
@@ -12,25 +12,17 @@ const KEY_DIRS = {
 
 export function createInput(canvas) {
   const state = {
-    px: 0, py: 0,          // pointer in CSS pixels
-    hasPointer: false,
-    touching: false,
+    tx: 0, ty: 0,          // last touch position in CSS pixels
+    touching: false,       // true only while a finger is on the canvas
     keys: new Set(),
     onPause: null,         // set by main
     onAnyGesture: null,    // set by main (audio unlock)
   };
 
-  canvas.addEventListener('mousemove', (e) => {
-    state.px = e.clientX;
-    state.py = e.clientY;
-    state.hasPointer = true;
-  });
-
   const touch = (e) => {
     if (e.touches.length > 0) {
-      state.px = e.touches[0].clientX;
-      state.py = e.touches[0].clientY;
-      state.hasPointer = true;
+      state.tx = e.touches[0].clientX;
+      state.ty = e.touches[0].clientY;
       state.touching = true;
     }
     if (e.cancelable) e.preventDefault();
@@ -80,9 +72,9 @@ export function createInput(canvas) {
       const len = Math.hypot(x, y);
       if (len > 0) return { x: x / len, y: y / len, mag: 1 };
     }
-    // Pointer: steer toward it, throttle by distance (dead zone at center).
-    if (state.hasPointer) {
-      const target = screenToWorld(cam, w, h, state.px, state.py);
+    // Touch drag: steer toward the finger while it's down; dead zone at center.
+    if (state.touching) {
+      const target = screenToWorld(cam, w, h, state.tx, state.ty);
       const dx = target.x - hole.x;
       const dy = target.y - hole.y;
       const dist = Math.hypot(dx, dy);

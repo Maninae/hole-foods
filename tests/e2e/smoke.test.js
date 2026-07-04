@@ -62,35 +62,73 @@ test('desktop: boots clean, plays, swallows, grows', async () => {
   assert.equal(await page.evaluate(() => window.__game.mode), 'playing');
   const r0 = await page.evaluate(() => window.__game.hole.r);
 
-  // Steer with real mouse moves toward the nearest edible object until fed.
+  // Steer with the arrow keys toward the nearest edible object until fed:
+  // recompute the world-space direction each tick and hold whichever axes
+  // dominate (two keys = diagonal). Release everything at the end so the
+  // pause step and later tests start from a clean keyboard.
+  const held = new Set();
+  const setHeld = async (want) => {
+    for (const k of held) {
+      if (!want.has(k)) { await page.keyboard.up(k); held.delete(k); }
+    }
+    for (const k of want) {
+      if (!held.has(k)) { await page.keyboard.down(k); held.add(k); }
+    }
+  };
+  const releaseAll = async () => {
+    for (const k of held) await page.keyboard.up(k);
+    held.clear();
+  };
+
   const deadline = Date.now() + 25000;
   let score = '0'; // BigInt lives page-side; we carry it out as a decimal string
-  while (Date.now() < deadline) {
-    const target = await page.evaluate(() => {
-      const g = window.__game;
-      const { hole } = g;
-      let best = null;
-      let bestD = Infinity;
-      for (const chunk of g.world.chunks.values()) {
-        for (const o of chunk.objects) {
-          if (o.state !== 'idle' || o.r > hole.r * g.CONFIG.FIT_FACTOR) continue;
-          const d = Math.hypot(o.x - hole.x, o.y - hole.y);
-          if (d < bestD) { bestD = d; best = { x: o.x, y: o.y }; }
+  try {
+    while (Date.now() < deadline) {
+      const info = await page.evaluate(() => {
+        const g = window.__game;
+        const { hole } = g;
+        let best = null;
+        let bestD = Infinity;
+        for (const chunk of g.world.chunks.values()) {
+          for (const o of chunk.objects) {
+            if (o.state !== 'idle' || o.r > hole.r * g.CONFIG.FIT_FACTOR) continue;
+            const d = Math.hypot(o.x - hole.x, o.y - hole.y);
+            if (d < bestD) { bestD = d; best = { x: o.x, y: o.y }; }
+          }
         }
+        if (!best) return null;
+        // Score is BigInt in the page context; stringify to cross page.evaluate.
+        return {
+          hx: hole.x, hy: hole.y,
+          tx: best.x, ty: best.y,
+          score: String(hole.score),
+        };
+      });
+      assert.ok(info, 'no edible object found anywhere');
+      score = info.score;
+      if (BigInt(score) > 0n) break;
+
+      const dx = info.tx - info.hx;
+      const dy = info.ty - info.hy;
+      const mag = Math.hypot(dx, dy) || 1;
+      const nx = dx / mag;
+      const ny = dy / mag;
+      const want = new Set();
+      // Threshold ~cos(70°): axes within ~20° of pure diagonal press both keys.
+      if (nx > 0.35) want.add('ArrowRight');
+      else if (nx < -0.35) want.add('ArrowLeft');
+      if (ny > 0.35) want.add('ArrowDown');
+      else if (ny < -0.35) want.add('ArrowUp');
+      // Fallback: near-axis targets still need at least one key held.
+      if (want.size === 0) {
+        if (Math.abs(nx) >= Math.abs(ny)) want.add(nx >= 0 ? 'ArrowRight' : 'ArrowLeft');
+        else want.add(ny >= 0 ? 'ArrowDown' : 'ArrowUp');
       }
-      if (!best) return null;
-      const s = g.worldToScreen(best.x, best.y);
-      // Score is BigInt in the page context; stringify to cross page.evaluate.
-      return { x: s.x, y: s.y, score: String(hole.score) };
-    });
-    assert.ok(target, 'no edible object found anywhere');
-    score = target.score;
-    if (BigInt(score) > 0n) break;
-    await page.mouse.move(
-      Math.min(1430, Math.max(10, target.x)),
-      Math.min(890, Math.max(10, target.y)),
-    );
-    await page.waitForTimeout(120);
+      await setHeld(want);
+      await page.waitForTimeout(120);
+    }
+  } finally {
+    await releaseAll();
   }
   assert.ok(BigInt(score) > 0n, 'never swallowed anything within 25s');
 
