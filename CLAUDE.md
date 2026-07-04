@@ -33,6 +33,10 @@ js/ground.js         ONE radial gradient from world origin per frame (bands are
 js/particles.js      suck-burst / confetti / floaters / rings pools;
                      drawFxWorld (parts+rings, ground plane) / drawFxText
                      (floaters, billboard/screen space) split for iso view
+js/levelfx.js        MapleStory-style level-up celebration: ground glow +
+                     ring pulses (world), pillar + sparkles + big overshoot
+                     "LEVEL UP! N" text (screen). Escalates with level;
+                     every 10 levels adds a full-screen wash.
 js/render.js         two passes for the pseudo-3D view:
                      GROUND (squashed by ISO_Y): ground → decals → hole
                      (pit→falling(clipped)→rim) → tease rings → fxWorld.

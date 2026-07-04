@@ -92,12 +92,30 @@ export function comboTick(mult) {
   tone('square', f, f * 1.3, t0, 0.07, 0.1);
 }
 
-export function levelUp() {
+// intensity: 1.0 at level 1, capped at 3.5 (matches levelfx.intensityForLevel).
+// Higher tiers add extra higher-octave arpeggio notes; milestones (every 10
+// levels) get a longer, louder tail with a bright top-C shimmer.
+export function levelUp(intensity = 1, opts = {}) {
   if (!actx) return;
   const t0 = actx.currentTime;
-  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
-    tone('triangle', f, f, t0 + i * 0.075, 0.22, 0.16);
+  const milestone = !!opts.milestone;
+  const step = Math.max(0.055, 0.075 - 0.006 * (intensity - 1));
+  const peak = 0.16 + 0.04 * (intensity - 1) + (milestone ? 0.05 : 0);
+  const dur = 0.22 + 0.06 * (intensity - 1);
+  const base = [523.25, 659.25, 783.99, 1046.5];
+  base.forEach((f, i) => {
+    tone('triangle', f, f, t0 + i * step, dur, peak);
   });
+  // One extra higher-octave note per 0.5 of intensity above the base tier.
+  const extraNotes = Math.min(4, Math.floor((intensity - 1) / 0.5));
+  for (let k = 0; k < extraNotes; k++) {
+    const f = base[k % base.length] * 2;
+    tone('triangle', f, f, t0 + (base.length + k) * step * 0.7, dur * 0.7, peak * 0.6);
+  }
+  if (milestone) {
+    tone('triangle', 2093, 2093, t0 + base.length * step, dur * 1.3, peak * 0.9);
+    tone('sine', 1046.5, 1046.5, t0 + base.length * step, dur * 1.5, peak * 0.8);
+  }
 }
 
 export function uiClick() {

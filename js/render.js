@@ -13,6 +13,7 @@ import { drawEmoji } from './sprites.js';
 import { fallingVisual } from './swallow.js';
 import { levelProgress } from './hole.js';
 import { drawFxWorld, drawFxText } from './particles.js';
+import { drawLevelFxGround, drawLevelFxBillboard } from './levelfx.js';
 import { CONFIG } from './config.js';
 
 export function createRenderer(canvas) {
@@ -133,7 +134,7 @@ function drawHole(ctx, hole, sw, time, screenScale, zoom) {
 }
 
 export function renderScene(R, state) {
-  const { world, hole, cam, sw, fx, time } = state;
+  const { world, hole, cam, sw, fx, levelFx, time } = state;
   const { ctx, w, h, dpr } = R;
   const t = getTransform(cam, w, h);
   const screenScale = t.scale * dpr;
@@ -189,6 +190,12 @@ export function renderScene(R, state) {
 
   drawFxWorld(ctx, fx);
 
+  // Level-up ground effects: expanding gold glow + staggered ring pulses.
+  // Drawn last on the ground plane so they read over decals/tease rings.
+  // Ground shapes are sized in screen units and converted to world coords,
+  // so the ring/glow radius stays sane at any zoom.
+  if (levelFx) drawLevelFxGround(ctx, levelFx, t, w, h);
+
   // --- Billboard pass (upright) ---
   // Sprites and shadows go straight to CSS-pixel space so nothing gets
   // vertically squished; we manually map world -> screen per draw.
@@ -232,4 +239,8 @@ export function renderScene(R, state) {
 
   // Score floaters last: upright, min-screen-size, straight onto CSS px.
   drawFxText(ctx, fx, t);
+
+  // Level-up hero: pillar, sparkles, big title, milestone screen flash.
+  // Drawn after floaters so the celebration reads on top of everything.
+  if (levelFx) drawLevelFxBillboard(ctx, levelFx, t, w, h);
 }

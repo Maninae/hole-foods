@@ -6,7 +6,10 @@ import { createHole, updateHole } from './hole.js';
 import { createSwallow, swallowUpdate } from './swallow.js';
 import { createCamera, updateCamera, shake, worldToScreen } from './camera.js';
 import { createRenderer, renderScene } from './render.js';
-import { createFx, updateFx, suckBurst, confetti, floatText, ringPulse } from './particles.js';
+import { createFx, updateFx, suckBurst, floatText } from './particles.js';
+import {
+  createLevelFx, spawnLevelUp, updateLevelFx, intensityForLevel, isMilestone,
+} from './levelfx.js';
 import { createInput } from './input.js';
 import { createHud, saveBest, fmtNum } from './hud.js';
 import * as audio from './audio.js';
@@ -31,6 +34,7 @@ const game = {
   hole: null,
   sw: null,
   fx: null,
+  levelFx: null,
   cam: createCamera(),
   time: 0,
 };
@@ -40,6 +44,7 @@ function newRun() {
   game.hole = createHole();
   game.sw = createSwallow();
   game.fx = createFx();
+  game.levelFx = createLevelFx();
   game.cam = createCamera();
   hud.shownBand = null;
   hud.displayScore = 0;
@@ -74,12 +79,9 @@ function handleEvents(events) {
     } else if (ev.type === 'combo') {
       audio.comboTick(ev.mult);
     } else if (ev.type === 'levelup') {
-      audio.levelUp();
-      ringPulse(fx, hole.x, hole.y, hole.r * 0.8, hole.r * 2.5, 45, hole.r * 0.1);
-      confetti(fx, Math.random, hole.x, hole.y, hole.r, reducedMotion ? 0 : 30);
-      floatText(fx, hole.x, hole.y - hole.r * 2.1, `LEVEL ${ev.level}!`, {
-        size: hole.r * 0.7, hue: 43, sat: 95, up: hole.r * 1.3,
-      });
+      audio.levelUp(intensityForLevel(ev.level), { milestone: isMilestone(ev.level) });
+      spawnLevelUp(game.levelFx, ev.level, hole, { reducedMotion });
+      if (!reducedMotion) shake(cam, Math.min(hole.r * 0.35, 24));
     }
   }
   hud.handleEvents(events);
@@ -106,6 +108,7 @@ function frame(nowMs) {
     handleEvents(swallowUpdate(sw, dt, game.time, world, hole));
     updateCamera(cam, dt, hole);
     updateFx(fx, dt);
+    updateLevelFx(game.levelFx, dt);
     hud.update(dt, hole);
     hud.setBand(bandAt(hole.x, hole.y));
   } else if (game.mode === 'menu') {
@@ -120,7 +123,7 @@ function frame(nowMs) {
     );
   }
 
-  renderScene(R, { world, hole, cam, sw, fx, time: game.time });
+  renderScene(R, { world, hole, cam, sw, fx, levelFx: game.levelFx, time: game.time });
 }
 requestAnimationFrame(frame);
 
@@ -206,6 +209,8 @@ window.__game = {
   get hole() { return game.hole; },
   get cam() { return game.cam; },
   get sw() { return game.sw; },
+  get fx() { return game.fx; },
+  get levelFx() { return game.levelFx; },
   worldToScreen(x, y) {
     return worldToScreen(game.cam, R.w, R.h, x, y);
   },
