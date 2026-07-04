@@ -20,12 +20,12 @@ const CLUSTER_MAX_BASE_R = 70;
 // A region is an oasis with this probability; the rest is sparse desert.
 // Regions inside the starter radius are always oases regardless of the roll.
 const REGION_SIZE = 3;
-const OASIS_PROB = 0.35;
+const OASIS_PROB = 0.2;
 // Desert chunks' crumbs are drawn from a biome's smallest few items.
 const DESERT_ITEM_TIER = 4;
 // A desert chunk still gets a single full-table surprise this often — a rare
 // giant sighting between oases.
-const DESERT_SURPRISE_PROB = 0.06;
+const DESERT_SURPRISE_PROB = 0.05;
 
 export function chunkSizeAt(level) {
   return CONFIG.CHUNK * Math.pow(CONFIG.CYCLE_SIZE_MULT, level);
@@ -128,7 +128,7 @@ function generateChunk(world, level, cx, cy) {
   if (isOasis) {
     // Rich: several decorative clusters plus a bunch of scattered singles.
     const clusterItems = biome.items.filter((it) => it.r <= CLUSTER_MAX_BASE_R);
-    const nClusters = clusterItems.length === 0 ? 0 : rng.int(3, 5);
+    const nClusters = clusterItems.length === 0 ? 0 : rng.int(2, 3);
     for (let ci = 0; ci < nClusters; ci++) {
       const item = rng.pickWeighted(clusterItems, (it) => it.w);
       const pattern = rng.pick(PATTERN_KEYS);
@@ -138,7 +138,7 @@ function generateChunk(world, level, cx, cy) {
         tryPlace(item, cxw + p.x, cyw + p.y);
       }
     }
-    const nSingles = rng.int(7, 13);
+    const nSingles = rng.int(4, 8);
     for (let i = 0; i < nSingles; i++) {
       const item = rng.pickWeighted(biome.items, (it) => it.w);
       tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
@@ -147,7 +147,7 @@ function generateChunk(world, level, cx, cy) {
     // Desert: a scattering of crumbs from the biome's smallest few items,
     // with a rare full-table surprise to keep exploration interesting.
     const crumbItems = smallestItems(biome, DESERT_ITEM_TIER);
-    const nCrumbs = rng.int(0, 2);
+    const nCrumbs = rng.int(0, 1);
     for (let i = 0; i < nCrumbs; i++) {
       const item = rng.pickWeighted(crumbItems, (it) => it.w);
       tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
