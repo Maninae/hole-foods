@@ -188,63 +188,6 @@
   letter-spacing: 0.16em;
 }
 
-/* --- Achievement list ------------------------------------------------ */
-
-.achievement-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.achievement {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--panel-line);
-  transition: background 0.15s;
-}
-
-.achievement.locked { opacity: 0.5; filter: grayscale(0.7); }
-
-.achievement.unlocked {
-  background: linear-gradient(90deg,
-    rgba(255, 209, 102, 0.16), rgba(255, 209, 102, 0.02) 80%);
-  border-color: rgba(255, 209, 102, 0.42);
-}
-
-.achievement-emoji {
-  font-size: 26px;
-  line-height: 1;
-  flex-shrink: 0;
-  width: 34px;
-  text-align: center;
-  filter: drop-shadow(0 2px 3px rgba(10, 4, 24, 0.35));
-}
-
-.achievement-body { min-width: 0; flex: 1; }
-
-.achievement-name {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--cream);
-  line-height: 1.2;
-}
-
-.achievement.unlocked .achievement-name { color: var(--gold); }
-
-.achievement-desc {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--cream);
-  opacity: 0.75;
-  line-height: 1.35;
-  margin-top: 2px;
-}
-
 @media (max-width: 640px) {
   .sticker-grid { grid-template-columns: repeat(3, 1fr); }
   .sticker-name { font-size: 10.5px; min-height: 24px; }
