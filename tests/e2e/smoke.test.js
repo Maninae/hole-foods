@@ -133,7 +133,7 @@ test('desktop: boots clean, plays, swallows, grows', async () => {
   assert.ok(BigInt(score) > 0n, 'never swallowed anything within 25s');
 
   const after1 = await page.evaluate(() => ({
-    r: window.__game.hole.r,
+    potential: window.__game.hole.potential,
     eaten: window.__game.hole.eatenCount,
   }));
   assert.ok(after1.potential > r0, `potential did not grow: ${after1.potential} <= ${r0}`);
