@@ -19,7 +19,7 @@ test('createLevelFx returns an empty active pool', () => {
   assert.deepEqual(fx.active, []);
 });
 
-test('spawn snapshots the hole and pushes onto the active pool', () => {
+test('spawn anchors on the hole and pushes onto the active pool', () => {
   const fx = createLevelFx();
   spawnLevelUp(fx, 3, { x: 10, y: -20, r: 42 });
   assert.equal(fx.active.length, 1);
@@ -30,6 +30,23 @@ test('spawn snapshots the hole and pushes onto the active pool', () => {
   assert.equal(c.r, 42);
   // Duration is positive and finite.
   assert.ok(c.duration > 1 && c.duration < 4);
+});
+
+test('celebration follows the hole as it keeps moving (player-anchored, not ground-anchored)', () => {
+  const fx = createLevelFx();
+  const hole = { x: 10, y: -20, r: 42 };
+  spawnLevelUp(fx, 3, hole);
+  const c = fx.active[0];
+  assert.equal(c.x, 10);
+  // The player keeps steering (and can even level again) mid-celebration...
+  hole.x = 500;
+  hole.y = 300;
+  hole.r = 51;
+  updateLevelFx(fx, 0.2);
+  // ...and the aura/pillar/text anchor rides along with the hole.
+  assert.equal(c.x, 500);
+  assert.equal(c.y, 300);
+  assert.equal(c.r, 51);
 });
 
 test('update advances t and expires the celebration by its duration', () => {

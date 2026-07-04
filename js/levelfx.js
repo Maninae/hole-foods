@@ -79,8 +79,10 @@ function rgba([r, g, b], a) { return `rgba(${r}, ${g}, ${b}, ${a})`; }
 
 const BASE_DURATION = 1.85;
 
-// Snapshot the hole's world pos/radius: the beam plants itself where the
-// level-up happened, so the hole can keep moving without dragging it.
+// The celebration rides WITH the hole: x/y/r are live reads of the hole the
+// player is steering, so the glow, pillar, and LEVEL UP! text follow the
+// character instead of planting on the ground where the level-up happened
+// (owner feedback — the ground-anchored version looked left behind).
 export function spawnLevelUp(fx, level, hole, opts = {}) {
   const reducedMotion = !!opts.reducedMotion;
   const intensity = intensityForLevel(level);
@@ -88,9 +90,10 @@ export function spawnLevelUp(fx, level, hole, opts = {}) {
   const duration = BASE_DURATION + 0.25 * (intensity - 1) + (milestone ? 0.3 : 0);
 
   const celebration = {
-    x: hole.x,
-    y: hole.y,
-    r: hole.r,
+    hole,
+    get x() { return this.hole.x; },
+    get y() { return this.hole.y; },
+    get r() { return this.hole.r; },
     level,
     intensity,
     milestone,
