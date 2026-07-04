@@ -1,8 +1,8 @@
-// Ground painting: per-chunk biome colors blended smoothly across band
-// boundaries, plus a subtle per-biome dot-pattern tile. DOM module.
+// Ground painting: per-chunk theme colors blended smoothly across band
+// boundaries, plus a subtle per-theme dot-pattern tile. DOM module.
 
 import { CONFIG } from './config.js';
-import { BIOMES, bandIndex, bandRange, biomeForBand } from './catalog.js';
+import { THEMES, bandIndex, bandRange, biomeForBand } from './catalog.js';
 import { forEachChunkInRect, chunkSizeAt } from './world.js';
 
 // Fraction of a band's width used to blend into its neighbors — scales with
@@ -21,7 +21,9 @@ function mix(a, b, t) {
   return `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
 }
 
-const RGB = new Map(BIOMES.map((b) => [b.key, hexToRgb(b.ground)]));
+// One RGB entry per theme in the pool — the rotation may land on any of
+// them at any band, so all must be resolvable.
+const RGB = new Map(THEMES.map((t) => [t.key, hexToRgb(t.ground)]));
 
 // Blended ground color at a world distance from origin.
 export function groundColorAt(dist) {
@@ -42,14 +44,15 @@ export function groundColorAt(dist) {
   return mix(cur, cur, 0);
 }
 
-// One subtle 64px polka-dot tile per (biome, level), tiled in world space —
+// One subtle 64px polka-dot tile per (theme, level), tiled in world space —
 // the pattern scale follows the chunk level so texture reads at every zoom.
+// Cached lazily: any of the 18 themes is a valid key here.
 const tiles = new Map();
-function tileFor(biomeKey, level) {
-  const key = `${biomeKey}@${level}`;
+function tileFor(themeKey, level) {
+  const key = `${themeKey}@${level}`;
   let t = tiles.get(key);
   if (t) return t;
-  const alt = BIOMES.find((b) => b.key === biomeKey).groundAlt;
+  const alt = THEMES.find((th) => th.key === themeKey).groundAlt;
   const c = document.createElement('canvas');
   c.width = 64;
   c.height = 64;
@@ -85,7 +88,7 @@ export function drawGround(ctx, world, x0, y0, x1, y1) {
   ctx.fillStyle = grad;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
 
-  // Subtle per-biome dot texture, chunk by chunk (seams invisible at 4% ink).
+  // Subtle per-theme dot texture, chunk by chunk (seams invisible at 4% ink).
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     const C = chunkSizeAt(chunk.level);
     const cx0 = chunk.cx * C;

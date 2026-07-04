@@ -1,126 +1,374 @@
-// Biome + object catalog: what the world is made of.
-// Radii are base sizes for cycle 0; sizeMultForBand compounds per full biome cycle.
-// `up: true` = never rotate (buildings, trees, rides). Pure module: no DOM.
+// Theme + object catalog: what the world is made of.
+//
+// Every theme's items live in ONE canonical base-radius range (~7..60). The
+// ARRIVAL SCALE is not baked into the tables — it comes from the SLOT_MULTS
+// ladder below, which multiplies base sizes by the band's slot within its
+// cycle (slot = band % BANDS_PER_CYCLE). This way any theme can appear at
+// any slot: pace at slot 0, cathedrals at slot 5, from the same raw table.
+//
+// `up: true` = never rotate (buildings, trees, standing figures). Pure
+// module: no DOM.
 
 import { CONFIG } from './config.js';
 
-export const BIOMES = [
+// Sizes step up by ~1.55x per slot inside a cycle — matches the arrival-
+// pacing rule (hole grows roughly 1.55x per band traversed), so the slot-k
+// item ladder is still edible when a hole reaches slot k.
+export const SLOT_MULTS = [1, 1.55, 2.4, 3.72, 5.77, 8.95];
+
+// The 18-theme pool. First six are the classic biomes in original order —
+// cycle 0's rotation must land on them, and BIOMES stays exported as an
+// alias for anything that used to import a 6-item array.
+export const THEMES = [
   {
     key: 'meadow', name: 'Berry Meadow',
     ground: '#9fd483', groundAlt: '#93c977', decals: ['🌼', '🌿', '🦋'],
     items: [
-      { e: '🫐', r: 7, w: 10, hue: 230 },
-      { e: '🍇', r: 9, w: 9, hue: 280 },
-      { e: '🍓', r: 10, w: 9, hue: 350 },
-      { e: '🍒', r: 11, w: 8, hue: 345 },
-      { e: '🍋', r: 13, w: 7, hue: 55 },
-      { e: '🥝', r: 14, w: 7, hue: 90 },
-      { e: '🍎', r: 15, w: 6, hue: 355 },
-      { e: '🍊', r: 15, w: 6, hue: 30 },
-      { e: '🍐', r: 16, w: 5, hue: 80 },
-      { e: '🍌', r: 17, w: 5, hue: 50 },
-      { e: '🍍', r: 26, w: 3, hue: 45 },
-      { e: '🍉', r: 34, w: 2, hue: 140 },
-      { e: '🧺', r: 42, w: 1.2, hue: 35 },
-      { e: '⛱️', r: 54, w: 0.7, hue: 190, up: true },
+      { e: '🫐', r: 7,  w: 10,  hue: 230 },
+      { e: '🍇', r: 9,  w: 9,   hue: 280 },
+      { e: '🍓', r: 11, w: 9,   hue: 350 },
+      { e: '🍒', r: 12, w: 8,   hue: 345 },
+      { e: '🍋', r: 14, w: 7,   hue: 55 },
+      { e: '🥝', r: 16, w: 7,   hue: 90 },
+      { e: '🍎', r: 18, w: 6,   hue: 355 },
+      { e: '🍊', r: 20, w: 6,   hue: 30 },
+      { e: '🍐', r: 22, w: 5,   hue: 80 },
+      { e: '🍌', r: 25, w: 5,   hue: 50 },
+      { e: '🍍', r: 32, w: 3,   hue: 45 },
+      { e: '🍉', r: 42, w: 2,   hue: 140 },
+      { e: '🧺', r: 52, w: 1.2, hue: 35 },
+      { e: '⛱️', r: 60, w: 0.7, hue: 190, up: true },
     ],
   },
   {
     key: 'orchard', name: 'Orchard Grove',
     ground: '#6fb35f', groundAlt: '#66a857', decals: ['🍂', '🌱', '🍄'],
     items: [
-      { e: '🌰', r: 12, w: 10, hue: 25 },
-      { e: '🌷', r: 14, w: 8, hue: 330 },
-      { e: '🍑', r: 15, w: 8, hue: 20 },
-      { e: '🍏', r: 16, w: 7, hue: 100 },
-      { e: '🍄', r: 18, w: 7, hue: 5 },
-      { e: '🥥', r: 20, w: 5, hue: 30 },
-      { e: '🌻', r: 22, w: 5, hue: 48 },
-      { e: '🎃', r: 32, w: 3, hue: 28 },
-      { e: '🪵', r: 38, w: 2, hue: 30 },
-      { e: '🌳', r: 58, w: 1.5, hue: 120, up: true },
-      { e: '🌲', r: 66, w: 1.2, hue: 150, up: true },
-      { e: '🛖', r: 90, w: 0.5, hue: 30, up: true },
+      { e: '🌰', r: 8,  w: 10,  hue: 25 },
+      { e: '🌷', r: 10, w: 9,   hue: 330 },
+      { e: '🍑', r: 12, w: 8,   hue: 20 },
+      { e: '🍏', r: 14, w: 8,   hue: 100 },
+      { e: '🍄', r: 16, w: 7,   hue: 5 },
+      { e: '🥥', r: 20, w: 6,   hue: 30 },
+      { e: '🌻', r: 24, w: 5,   hue: 48 },
+      { e: '🎃', r: 28, w: 4,   hue: 28 },
+      { e: '🪵', r: 34, w: 3,   hue: 30 },
+      { e: '🌳', r: 44, w: 2,   hue: 120, up: true },
+      { e: '🌲', r: 52, w: 1.5, hue: 150, up: true },
+      { e: '🛖', r: 60, w: 0.8, hue: 30,  up: true },
     ],
   },
   {
     key: 'bakery', name: 'Sugar Bakery',
     ground: '#f4cdbd', groundAlt: '#efc2b0', decals: ['✨', '🫧'],
     items: [
-      { e: '🍬', r: 12, w: 10, hue: 320 },
-      { e: '🍪', r: 15, w: 9, hue: 35 },
-      { e: '🍭', r: 17, w: 8, hue: 300 },
-      { e: '🍫', r: 19, w: 7, hue: 25 },
-      { e: '🥨', r: 21, w: 6, hue: 35 },
-      { e: '🧁', r: 22, w: 6, hue: 330 },
-      { e: '🥐', r: 23, w: 6, hue: 40 },
-      { e: '🍩', r: 24, w: 6, hue: 315 },
-      { e: '☕', r: 26, w: 4, hue: 25 },
-      { e: '🍰', r: 30, w: 4, hue: 345 },
-      { e: '🥞', r: 32, w: 3, hue: 42 },
-      { e: '🥧', r: 36, w: 3, hue: 35 },
+      { e: '🍬', r: 8,  w: 10,  hue: 320 },
+      { e: '🍪', r: 10, w: 9,   hue: 35 },
+      { e: '🍭', r: 12, w: 8,   hue: 300 },
+      { e: '🍫', r: 14, w: 7,   hue: 25 },
+      { e: '🥨', r: 16, w: 7,   hue: 35 },
+      { e: '🧁', r: 18, w: 6,   hue: 330 },
+      { e: '🥐', r: 20, w: 6,   hue: 40 },
+      { e: '🍩', r: 22, w: 5,   hue: 315 },
+      { e: '☕', r: 26, w: 4,   hue: 25 },
+      { e: '🍰', r: 32, w: 4,   hue: 345 },
+      { e: '🥞', r: 38, w: 3,   hue: 42 },
+      { e: '🥧', r: 44, w: 2,   hue: 35 },
       { e: '🎂', r: 52, w: 1.5, hue: 335 },
-      { e: '🚚', r: 85, w: 0.5, hue: 210, up: true },
+      { e: '🚚', r: 60, w: 0.7, hue: 210, up: true },
     ],
   },
   {
     key: 'toybox', name: 'Toybox Town',
     ground: '#c9b4ea', groundAlt: '#bfa8e3', decals: ['⭐', '🎵'],
     items: [
-      { e: '🎲', r: 16, w: 9, hue: 0 },
-      { e: '🪀', r: 18, w: 8, hue: 350 },
-      { e: '⚽', r: 20, w: 8, hue: 0 },
-      { e: '🏀', r: 22, w: 7, hue: 20 },
-      { e: '🎈', r: 24, w: 7, hue: 355 },
-      { e: '🪁', r: 26, w: 6, hue: 200 },
-      { e: '🎁', r: 30, w: 5, hue: 340 },
-      { e: '🧸', r: 34, w: 5, hue: 30 },
-      { e: '🛴', r: 40, w: 3, hue: 200 },
-      { e: '🚲', r: 46, w: 2.5, hue: 140 },
-      { e: '🛝', r: 70, w: 1.2, hue: 45, up: true },
-      { e: '🎠', r: 95, w: 0.7, hue: 330, up: true },
-      { e: '🎪', r: 120, w: 0.5, hue: 0, up: true },
+      { e: '🎲', r: 8,  w: 10,  hue: 0 },
+      { e: '🪀', r: 10, w: 9,   hue: 350 },
+      { e: '⚽', r: 12, w: 8,   hue: 0 },
+      { e: '🏀', r: 14, w: 7,   hue: 20 },
+      { e: '🎈', r: 16, w: 7,   hue: 355 },
+      { e: '🪁', r: 20, w: 6,   hue: 200 },
+      { e: '🎁', r: 24, w: 5,   hue: 340 },
+      { e: '🧸', r: 28, w: 5,   hue: 30 },
+      { e: '🛴', r: 34, w: 4,   hue: 200 },
+      { e: '🚲', r: 40, w: 3,   hue: 140 },
+      { e: '🛝', r: 48, w: 2,   hue: 45,  up: true },
+      { e: '🎠', r: 54, w: 1.2, hue: 330, up: true },
+      { e: '🎪', r: 60, w: 0.7, hue: 0,   up: true },
     ],
   },
   {
     key: 'funfair', name: 'Funfair Boardwalk',
     ground: '#8fd0c6', groundAlt: '#83c6bb', decals: ['🎊', '✨'],
     items: [
-      { e: '🍦', r: 20, w: 9, hue: 40 },
-      { e: '🥤', r: 22, w: 8, hue: 355 },
-      { e: '🍟', r: 24, w: 8, hue: 48 },
-      { e: '🌭', r: 26, w: 7, hue: 30 },
-      { e: '🍔', r: 28, w: 6, hue: 35 },
-      { e: '🍕', r: 32, w: 5, hue: 30 },
-      { e: '🪑', r: 36, w: 4, hue: 30 },
-      { e: '🎳', r: 44, w: 3, hue: 210 },
-      { e: '🛶', r: 60, w: 2, hue: 25 },
-      { e: '⛲', r: 95, w: 1, hue: 200, up: true },
-      { e: '🎢', r: 150, w: 0.6, hue: 210, up: true },
-      { e: '🎡', r: 190, w: 0.5, hue: 340, up: true },
+      { e: '🍦', r: 8,  w: 10,  hue: 40 },
+      { e: '🥤', r: 10, w: 9,   hue: 355 },
+      { e: '🍟', r: 12, w: 8,   hue: 48 },
+      { e: '🌭', r: 14, w: 7,   hue: 30 },
+      { e: '🍔', r: 16, w: 7,   hue: 35 },
+      { e: '🍕', r: 20, w: 6,   hue: 30 },
+      { e: '🍿', r: 22, w: 5,   hue: 50 },
+      { e: '🪑', r: 26, w: 4,   hue: 30 },
+      { e: '🎳', r: 32, w: 3,   hue: 210 },
+      { e: '🛶', r: 40, w: 2,   hue: 25 },
+      { e: '⛲', r: 48, w: 1.5, hue: 200, up: true },
+      { e: '🎢', r: 54, w: 1,   hue: 210, up: true },
+      { e: '🎡', r: 60, w: 0.6, hue: 340, up: true },
     ],
   },
   {
     key: 'downtown', name: 'Downtown',
     ground: '#b9c0cc', groundAlt: '#aeb6c4', decals: ['🐦', '🍂'],
     items: [
-      { e: '🛵', r: 45, w: 8, hue: 355 },
-      { e: '🚏', r: 55, w: 6, hue: 210, up: true },
-      { e: '🚗', r: 65, w: 7, hue: 0 },
-      { e: '🚕', r: 65, w: 6, hue: 48 },
-      { e: '🚙', r: 70, w: 6, hue: 210 },
-      { e: '🌳', r: 80, w: 5, hue: 120, up: true },
-      { e: '⛲', r: 90, w: 3, hue: 200, up: true },
-      { e: '🚚', r: 105, w: 3, hue: 25 },
-      { e: '🚌', r: 110, w: 3, hue: 45 },
-      { e: '🏠', r: 150, w: 2, hue: 25, up: true },
-      { e: '🏡', r: 160, w: 1.5, hue: 100, up: true },
-      { e: '⛪', r: 190, w: 0.8, hue: 220, up: true },
-      { e: '🏢', r: 230, w: 0.7, hue: 215, up: true },
-      { e: '🏬', r: 260, w: 0.5, hue: 200, up: true },
+      { e: '🛵', r: 8,  w: 10,  hue: 355 },
+      { e: '🚏', r: 10, w: 9,   hue: 210, up: true },
+      { e: '🚗', r: 14, w: 8,   hue: 0 },
+      { e: '🚕', r: 16, w: 7,   hue: 48 },
+      { e: '🚙', r: 18, w: 7,   hue: 210 },
+      { e: '🌳', r: 22, w: 6,   hue: 120, up: true },
+      { e: '⛲', r: 26, w: 5,   hue: 200, up: true },
+      { e: '🚚', r: 30, w: 4,   hue: 25 },
+      { e: '🚌', r: 34, w: 4,   hue: 45 },
+      { e: '🏠', r: 42, w: 3,   hue: 25,  up: true },
+      { e: '🏡', r: 46, w: 2,   hue: 100, up: true },
+      { e: '⛪', r: 52, w: 1.2, hue: 220, up: true },
+      { e: '🏢', r: 56, w: 0.8, hue: 215, up: true },
+      { e: '🏬', r: 60, w: 0.6, hue: 200, up: true },
+    ],
+  },
+  {
+    key: 'haunt', name: 'Halloween Haunt',
+    ground: '#a3663a', groundAlt: '#95593a', decals: ['🕸️', '🍂', '🌙'],
+    items: [
+      { e: '🍬', r: 7,  w: 10,  hue: 25 },
+      { e: '🍭', r: 9,  w: 9,   hue: 310 },
+      { e: '🕷️', r: 11, w: 8,   hue: 270 },
+      { e: '🦇', r: 13, w: 8,   hue: 280 },
+      { e: '🕸️', r: 15, w: 7,   hue: 0 },
+      { e: '🎃', r: 18, w: 6,   hue: 25 },
+      { e: '👻', r: 22, w: 5,   hue: 200 },
+      { e: '🧙', r: 28, w: 4,   hue: 280, up: true },
+      { e: '🪦', r: 32, w: 3,   hue: 0,   up: true },
+      { e: '⚰️', r: 38, w: 2.5, hue: 25 },
+      { e: '🧟', r: 44, w: 2,   hue: 110, up: true },
+      { e: '🏚️', r: 60, w: 0.8, hue: 25,  up: true },
+    ],
+  },
+  {
+    key: 'ocean', name: 'Ocean Depths',
+    ground: '#3a7ca5', groundAlt: '#326a95', decals: ['🫧', '💧', '🐚'],
+    items: [
+      { e: '🐚', r: 8,  w: 10,  hue: 45 },
+      { e: '🦐', r: 10, w: 9,   hue: 15 },
+      { e: '🦀', r: 12, w: 8,   hue: 10 },
+      { e: '🐠', r: 14, w: 8,   hue: 45 },
+      { e: '🐡', r: 16, w: 7,   hue: 48 },
+      { e: '🐙', r: 20, w: 6,   hue: 340 },
+      { e: '🦑', r: 22, w: 5,   hue: 340 },
+      { e: '🪸', r: 26, w: 5,   hue: 350 },
+      { e: '🐬', r: 32, w: 4,   hue: 210 },
+      { e: '🦈', r: 40, w: 3,   hue: 215 },
+      { e: '🐋', r: 46, w: 2,   hue: 220 },
+      { e: '⚓', r: 52, w: 1.5, hue: 210, up: true },
+      { e: '🚢', r: 60, w: 1,   hue: 210, up: true },
+    ],
+  },
+  {
+    key: 'savanna', name: 'Safari Savanna',
+    ground: '#c9a066', groundAlt: '#bd9560', decals: ['🌾', '🌿', '🪨'],
+    items: [
+      { e: '🐁', r: 7,  w: 10,  hue: 25 },
+      { e: '🐇', r: 9,  w: 9,   hue: 25 },
+      { e: '🦔', r: 11, w: 8,   hue: 25 },
+      { e: '🦎', r: 13, w: 7,   hue: 90 },
+      { e: '🦊', r: 15, w: 7,   hue: 25 },
+      { e: '🐒', r: 18, w: 6,   hue: 25 },
+      { e: '🐆', r: 22, w: 5,   hue: 40 },
+      { e: '🦓', r: 26, w: 5,   hue: 0 },
+      { e: '🦁', r: 32, w: 4,   hue: 40 },
+      { e: '🦒', r: 40, w: 3,   hue: 40,  up: true },
+      { e: '🐘', r: 46, w: 2,   hue: 210 },
+      { e: '🦏', r: 52, w: 1.5, hue: 210 },
+      { e: '🌴', r: 60, w: 1,   hue: 100, up: true },
+    ],
+  },
+  {
+    key: 'cosmos', name: 'Cosmic Void',
+    // Deep indigo, not black: the hole pit and dark object silhouettes
+    // still need contrast against the ground.
+    ground: '#3d3670', groundAlt: '#332c62', decals: ['✨', '⭐', '🌠'],
+    items: [
+      { e: '⭐', r: 7,  w: 10,  hue: 48 },
+      { e: '✨', r: 9,  w: 9,   hue: 48 },
+      { e: '☄️', r: 12, w: 7,   hue: 200 },
+      { e: '💫', r: 14, w: 7,   hue: 48 },
+      { e: '🌟', r: 16, w: 6,   hue: 48 },
+      { e: '🌠', r: 20, w: 5,   hue: 200 },
+      { e: '🌙', r: 24, w: 5,   hue: 48 },
+      { e: '🪐', r: 32, w: 4,   hue: 200 },
+      { e: '☀️', r: 36, w: 3,   hue: 48 },
+      { e: '🌎', r: 42, w: 3,   hue: 200 },
+      { e: '🛸', r: 50, w: 2,   hue: 280 },
+      { e: '🌌', r: 60, w: 1,   hue: 280, up: true },
+    ],
+  },
+  {
+    key: 'academy', name: 'Chalkboard Academy',
+    ground: '#3f6b4f', groundAlt: '#366145', decals: ['✏️', '📎', '⭐'],
+    items: [
+      { e: '✏️', r: 7,  w: 10,  hue: 48 },
+      { e: '📎', r: 9,  w: 9,   hue: 0 },
+      { e: '🖍️', r: 11, w: 8,   hue: 15 },
+      { e: '📏', r: 13, w: 7,   hue: 45 },
+      { e: '📐', r: 15, w: 7,   hue: 45 },
+      { e: '🔢', r: 18, w: 6,   hue: 45 },
+      { e: '🧮', r: 22, w: 5,   hue: 25 },
+      { e: '📚', r: 26, w: 5,   hue: 25 },
+      { e: '🎒', r: 32, w: 4,   hue: 15 },
+      { e: '📓', r: 36, w: 3,   hue: 210 },
+      { e: '🖥️', r: 42, w: 2,   hue: 200 },
+      { e: '🎓', r: 48, w: 1.5, hue: 0 },
+      { e: '🏫', r: 60, w: 0.8, hue: 340, up: true },
+    ],
+  },
+  {
+    key: 'winter', name: 'Winter Wonderland',
+    ground: '#cfe4ee', groundAlt: '#c1d9e5', decals: ['❄️', '✨', '🌲'],
+    items: [
+      { e: '❄️', r: 7,  w: 10,  hue: 200 },
+      { e: '🧊', r: 9,  w: 9,   hue: 200 },
+      { e: '⛸️', r: 11, w: 8,   hue: 210 },
+      { e: '🎿', r: 14, w: 7,   hue: 200 },
+      { e: '🛷', r: 16, w: 7,   hue: 15 },
+      { e: '🐧', r: 20, w: 6,   hue: 200 },
+      { e: '⛄', r: 26, w: 5,   hue: 200 },
+      { e: '🎁', r: 30, w: 4,   hue: 0 },
+      { e: '🎅', r: 34, w: 3,   hue: 0,   up: true },
+      { e: '⛷️', r: 40, w: 2.5, hue: 200, up: true },
+      { e: '🎄', r: 48, w: 2,   hue: 120, up: true },
+      { e: '🛖', r: 54, w: 1.2, hue: 200, up: true },
+      { e: '🏔️', r: 60, w: 0.8, hue: 200, up: true },
+    ],
+  },
+  {
+    key: 'sakura', name: 'Sakura Garden',
+    ground: '#f5cfd8', groundAlt: '#eebfcc', decals: ['🌸', '💮', '🍃'],
+    items: [
+      { e: '🌸', r: 7,  w: 10,  hue: 330 },
+      { e: '💮', r: 9,  w: 9,   hue: 330 },
+      { e: '🌷', r: 11, w: 8,   hue: 340 },
+      { e: '🍡', r: 13, w: 7,   hue: 330 },
+      { e: '🍵', r: 15, w: 7,   hue: 100 },
+      { e: '🍶', r: 18, w: 6,   hue: 45 },
+      { e: '🏮', r: 22, w: 5,   hue: 0 },
+      { e: '🎐', r: 26, w: 4,   hue: 200 },
+      { e: '🎎', r: 30, w: 3,   hue: 340 },
+      { e: '🎋', r: 36, w: 3,   hue: 120, up: true },
+      { e: '🌳', r: 44, w: 2,   hue: 340, up: true },
+      { e: '⛩️', r: 54, w: 1,   hue: 0,   up: true },
+      { e: '🏯', r: 60, w: 0.7, hue: 340, up: true },
+    ],
+  },
+  {
+    key: 'musichall', name: 'Music Hall',
+    ground: '#7d3c4a', groundAlt: '#703440', decals: ['🎵', '🎶', '✨'],
+    items: [
+      { e: '🎵', r: 7,  w: 10,  hue: 0 },
+      { e: '🎶', r: 9,  w: 9,   hue: 0 },
+      { e: '🎼', r: 11, w: 8,   hue: 0 },
+      { e: '🎤', r: 14, w: 7,   hue: 0 },
+      { e: '🥁', r: 16, w: 7,   hue: 25 },
+      { e: '🎧', r: 18, w: 6,   hue: 340 },
+      { e: '📻', r: 22, w: 5,   hue: 25 },
+      { e: '🎷', r: 26, w: 5,   hue: 45 },
+      { e: '🎺', r: 30, w: 4,   hue: 45 },
+      { e: '🎸', r: 34, w: 3,   hue: 25 },
+      { e: '🎻', r: 40, w: 2.5, hue: 25 },
+      { e: '🪗', r: 46, w: 2,   hue: 350 },
+      { e: '🎹', r: 54, w: 1.2, hue: 0 },
+      { e: '🎭', r: 60, w: 0.7, hue: 340, up: true },
+    ],
+  },
+  {
+    key: 'farm', name: 'Farm Country',
+    ground: '#d4b370', groundAlt: '#c9a765', decals: ['🌾', '🌱', '🍂'],
+    items: [
+      { e: '🥚', r: 7,  w: 10,  hue: 40 },
+      { e: '🐣', r: 9,  w: 9,   hue: 48 },
+      { e: '🌾', r: 11, w: 8,   hue: 45 },
+      { e: '🌽', r: 14, w: 8,   hue: 55 },
+      { e: '🐔', r: 16, w: 7,   hue: 0 },
+      { e: '🦆', r: 18, w: 6,   hue: 30 },
+      { e: '🌻', r: 22, w: 5,   hue: 48 },
+      { e: '🐑', r: 26, w: 5,   hue: 0 },
+      { e: '🐖', r: 30, w: 4,   hue: 340 },
+      { e: '🐄', r: 36, w: 3,   hue: 30 },
+      { e: '🐴', r: 42, w: 2.5, hue: 25 },
+      { e: '🚜', r: 48, w: 2,   hue: 25 },
+      { e: '🛖', r: 60, w: 1,   hue: 25,  up: true },
+    ],
+  },
+  {
+    key: 'jungle', name: 'Jungle Ruins',
+    ground: '#4a7845', groundAlt: '#416b3d', decals: ['🍃', '🌿', '🦋'],
+    items: [
+      { e: '🦋', r: 7,  w: 10,  hue: 280 },
+      { e: '🐛', r: 9,  w: 9,   hue: 100 },
+      { e: '🐜', r: 11, w: 8,   hue: 25 },
+      { e: '🐸', r: 13, w: 8,   hue: 100 },
+      { e: '🦎', r: 15, w: 7,   hue: 100 },
+      { e: '🦜', r: 18, w: 6,   hue: 0 },
+      { e: '🐍', r: 22, w: 5,   hue: 100 },
+      { e: '🐊', r: 26, w: 5,   hue: 100 },
+      { e: '🐆', r: 32, w: 4,   hue: 40 },
+      { e: '🐅', r: 38, w: 3,   hue: 25 },
+      { e: '🌴', r: 46, w: 2,   hue: 100, up: true },
+      { e: '🛕', r: 54, w: 1.5, hue: 30,  up: true },
+      { e: '🗿', r: 60, w: 0.8, hue: 0,   up: true },
+    ],
+  },
+  {
+    key: 'desert', name: 'Desert Bazaar',
+    ground: '#d9b380', groundAlt: '#cea675', decals: ['🌵', '🪨', '🌰'],
+    items: [
+      { e: '🌰', r: 7,  w: 10,  hue: 25 },
+      { e: '🪱', r: 9,  w: 9,   hue: 15 },
+      { e: '🦂', r: 11, w: 8,   hue: 25 },
+      { e: '🦎', r: 13, w: 7,   hue: 25 },
+      { e: '🐍', r: 16, w: 6,   hue: 25 },
+      { e: '🏺', r: 20, w: 6,   hue: 15 },
+      { e: '🐪', r: 24, w: 5,   hue: 25 },
+      { e: '🌵', r: 28, w: 5,   hue: 100, up: true },
+      { e: '⛺', r: 34, w: 4,   hue: 25,  up: true },
+      { e: '🐫', r: 40, w: 3,   hue: 25 },
+      { e: '🛖', r: 46, w: 2,   hue: 25,  up: true },
+      { e: '⛲', r: 52, w: 1.5, hue: 200, up: true },
+      { e: '🕌', r: 60, w: 1,   hue: 30,  up: true },
+    ],
+  },
+  {
+    key: 'factory', name: 'Robot Factory',
+    ground: '#7a8590', groundAlt: '#6f7a86', decals: ['⚙️', '🔩', '⚡'],
+    items: [
+      { e: '🔩', r: 7,  w: 10,  hue: 210 },
+      { e: '⚙️', r: 9,  w: 9,   hue: 210 },
+      { e: '🔋', r: 11, w: 8,   hue: 100 },
+      { e: '💡', r: 13, w: 7,   hue: 48 },
+      { e: '🧲', r: 15, w: 7,   hue: 0 },
+      { e: '🔧', r: 18, w: 6,   hue: 210 },
+      { e: '🛠️', r: 22, w: 5,   hue: 25 },
+      { e: '📦', r: 26, w: 5,   hue: 25 },
+      { e: '🦾', r: 30, w: 4,   hue: 210 },
+      { e: '🤖', r: 34, w: 3,   hue: 210, up: true },
+      { e: '🛰️', r: 40, w: 2.5, hue: 210 },
+      { e: '🏗️', r: 48, w: 2,   hue: 45,  up: true },
+      { e: '🏭', r: 60, w: 1,   hue: 210, up: true },
     ],
   },
 ];
+
+// Back-compat alias: prior code and tests spoke of BIOMES.
+export const BIOMES = THEMES;
 
 // Bands are GEOMETRIC: cycle k's bands are each CYCLE_SIZE_MULT^k wider than
 // cycle 0's, so the world is self-similar — at any scale, a band takes about
@@ -154,16 +402,34 @@ export function bandRange(band) {
   return { start: start + (band - N * k) * width, width };
 }
 
+// Theme rotation across the pool: `cycle * N + slot` walks the pool in
+// order, wrapping every THEMES.length bands. Cycle 0 hits themes 0..N-1
+// (the classic six by construction), cycle 1 hits N..2N-1, and so on.
 export function biomeForBand(band) {
-  return BIOMES[((band % CONFIG.BANDS_PER_CYCLE) + CONFIG.BANDS_PER_CYCLE) % CONFIG.BANDS_PER_CYCLE];
+  const N = CONFIG.BANDS_PER_CYCLE;
+  const cycle = Math.floor(band / N);
+  const slot = ((band % N) + N) % N;
+  const idx = ((cycle * N + slot) % THEMES.length + THEMES.length) % THEMES.length;
+  return THEMES[idx];
 }
 
 export function cycleForBand(band) {
   return Math.floor(band / CONFIG.BANDS_PER_CYCLE);
 }
 
+// Slot within the current cycle (0..BANDS_PER_CYCLE-1). The slot decides
+// how big this band's items should be regardless of which theme sits here.
+export function slotForBand(band) {
+  const N = CONFIG.BANDS_PER_CYCLE;
+  return ((band % N) + N) % N;
+}
+
+// Total size multiplier applied to placed items: cycle-scale × slot-scale.
+// Themes carry canonical base radii (~7..60); the ladder inside a cycle is
+// SLOT_MULTS, and every full cycle rescales by CYCLE_SIZE_MULT on top.
 export function sizeMultForBand(band) {
-  return Math.pow(CONFIG.CYCLE_SIZE_MULT, cycleForBand(band));
+  const cycleMult = Math.pow(CONFIG.CYCLE_SIZE_MULT, cycleForBand(band));
+  return cycleMult * SLOT_MULTS[slotForBand(band)];
 }
 
 // Points scale with placed (post-multiplier) area — scale-free across cycles.
@@ -175,7 +441,8 @@ export function pointsFor(placedRadius) {
   return BigInt(Math.max(1, Math.round((placedRadius * placedRadius) / CONFIG.POINTS_DIV)));
 }
 
-// Roman-numeral suffix for cycled biome names: "Berry Meadow II".
+// Roman-numeral suffix for cycled theme names: "Berry Meadow II" the second
+// time the pool wraps back around to it.
 const ROMAN = ['', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
 export function biomeDisplayName(band) {
   const cycle = cycleForBand(band);
