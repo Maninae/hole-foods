@@ -100,15 +100,18 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   chunk itself.
 - **Padded queries:** objects can sit outside their owning chunk's rect;
   PAD=3 chunks (in each level's own units) always covers cluster extents.
-- **1 world unit = 1 cm** for the HUD size label. Hole starts r=22 (44 cm).
+- **1 world unit = 1 cm** for the HUD size label. Hole starts r=26.4 (53 cm)
+  — the starter radius was sim-tuned up +20% (from 22) after owner feedback
+  that L1→L3 felt gated by too many oversized nearby items.
 - **Rim physics, not vacuum:** objects are inert until the hole's edge is
   under them (overhang > 0), teeter below 0.5, tip at 0.5. Never reintroduce
   long-range attraction — it was removed on purpose (owner feedback).
 - **Score is BigInt** end-to-end (pointsFor → events → hole.score → storage
   as string). Never mix it into Number arithmetic; format via js/format.js.
 - **Discrete size ladder:** hole.r is always exactly radiusForLevel(level) =
-  22·1.22^(level−1); eating grows hole.potential, and level-up snaps r to the
-  next rung (possibly several at once). Never let r drift off-ladder.
+  HOLE_R0·1.22^(level−1) with HOLE_R0=26.4; eating grows hole.potential, and
+  level-up snaps r to the next rung (possibly several at once). Never let r
+  drift off-ladder.
 - **Patchwork themes:** themeAt(x,y) is deterministic and seed-independent;
   band 0 is always Berry Meadow. Scale tier comes from distance (bands),
   theme from angle — don't couple them.
@@ -124,10 +127,16 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   (radius=huge, combo=×5) cascades a whole chain in dependency order. Keep
   the ACHIEVEMENTS array in topological order — the table-integrity test
   enforces both acyclicity and forward-only requires references.
-- **Balance is sim-tuned:** GROWTH_K and the oasis density constants were set
-  by greedy-bot simulation (`npm run sim -- 12 <seed>`; cycle 1 ≈ 4 min
-  greedy ≈ 5-8 min human, ~1.4-1.8x per cycle after). Re-run sims on 2-3
-  seeds before changing them.
+- **Balance is sim-tuned:** HOLE_R0 (26.4), GROWTH_K (0.0288), and the oasis
+  density constants were set by greedy-bot simulation
+  (`npm run sim -- 12 <seed>`; L3 reached in 20–45 s greedy, cycle 1
+  completion ≈ 3.5–6 min greedy ≈ 5-10 min human, ~1.4-1.8x per cycle after).
+  HOLE_R0 and GROWTH_K are locked together — bumping HOLE_R0 by factor f
+  scales starter-hole area by f², so K must also scale by f² to preserve
+  bites-per-level. World generation also biases the starter oasis (inside
+  STARTER_RADIUS) to place clusters only from items with base radius ≤ 25,
+  keeping the L1 view from being walled off by watermelon clusters. Re-run
+  sims on 3+ seeds before changing these.
 - Growth is scale-free: `r' = √(r² + GROWTH_K·s²)`; points = `s²/8`. If you change
   one, the pacing tests will tell you.
 
