@@ -144,15 +144,15 @@ export const ACHIEVEMENTS = [
   // Root edge to DEPTH: seeing your home meadow the second time only means
   // something once you know a full cycle has passed. This is the graph's
   // deliberate cross-link between branches.
-  { id: 'meadow-c1', name: 'Meadow, Grown', emoji: '🌾',
+  { id: 'meadow-c1', name: 'Meadow Grown', emoji: '🌾',
     description: 'Revisit Berry Meadow at cycle II.', branch: 'homecoming',
     trigger: { kind: 'themeCycle', key: 'meadow', cycle: 1 },
     requires: ['full-cycle'], col: 1, row: 6 },
-  { id: 'meadow-c2', name: 'Meadow, Massive', emoji: '🍓',
+  { id: 'meadow-c2', name: 'Meadow Massive', emoji: '🍓',
     description: 'Revisit Berry Meadow at cycle III.', branch: 'homecoming',
     trigger: { kind: 'themeCycle', key: 'meadow', cycle: 2 },
     requires: ['meadow-c1'], col: 2, row: 6 },
-  { id: 'meadow-6c', name: 'Meadow, Forever', emoji: '🌻',
+  { id: 'meadow-6c', name: 'Meadow Forever', emoji: '🌻',
     description: 'Visit Berry Meadow across 6 distinct cycles.',
     branch: 'homecoming',
     trigger: { kind: 'themeCycleCount', key: 'meadow', min: 6 },

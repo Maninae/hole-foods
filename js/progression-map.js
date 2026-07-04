@@ -195,8 +195,8 @@ export function createProgressionMap({ progress } = {}) {
     popover.querySelector('.pop-desc').textContent = node.description;
     const reqEl = popover.querySelector('.pop-req');
     if (state === 'locked' && node.requires.length > 0) {
-      // Join with a middot: achievement names may contain commas
-      // ("Meadow, Forever"), and a comma separator would read as two items.
+      // Join with a middot, not a comma: if a display name ever carries a
+      // comma again, a comma separator would read as two items.
       const missing = node.requires
         .filter((id) => !progress.unlocked.has(id))
         .map((id) => (ACHIEVEMENTS.find((x) => x.id === id) ?? { name: id }).name)
