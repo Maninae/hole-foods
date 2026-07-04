@@ -12,9 +12,11 @@ import {
 } from './levelfx.js';
 import { createInput } from './input.js';
 import { createHud, saveBest } from './hud.js';
-import { themeAt, themeDisplayName } from './catalog.js';
+import { themeAt, themeDisplayName, cycleForBand } from './catalog.js';
 import { fmtShort } from './format.js';
 import * as audio from './audio.js';
+import { loadProgress, saveProgress, ingest } from './achievements.js';
+import { createCollectionUI } from './collection-ui.js';
 
 const canvas = document.getElementById('game');
 const R = createRenderer(canvas);
@@ -39,7 +41,28 @@ const game = {
   levelFx: null,
   cam: createCamera(),
   time: 0,
+  progress: loadProgress(),  // meta-progression — survives newRun() and reload
+  shownTheme: null,          // last theme key we notified the engine of
+  shownCycle: -1,            // last cycle we notified the engine of
 };
+
+// Persist meta-progression whenever a new unlock lands (writes are cheap and
+// rare) and on pause / unload. Never per-frame.
+function saveMeta() { saveProgress(game.progress); }
+
+const collectionUI = createCollectionUI({
+  progress: game.progress,
+  reducedMotion,
+  onPing: () => audio.unlockPing(),
+});
+
+// Feed a batch of unlock entries: banner + persist. `applyUnlocks` never
+// throws; if the UI isn't ready (test/head env), we still save progress.
+function applyUnlocks(unlocks) {
+  if (unlocks.length === 0) return;
+  for (const u of unlocks) collectionUI.showUnlock(u);
+  saveMeta();
+}
 
 function newRun() {
   game.world = createWorld(freshSeed());
@@ -50,11 +73,16 @@ function newRun() {
   game.cam = createCamera();
   hud.shownBand = null;
   hud.displayScore = 0;
+  // Meta-progression (progress) is intentionally NOT touched here — it's the
+  // whole point of the discovery log surviving run restarts.
+  game.shownTheme = null;
+  game.shownCycle = -1;
 }
 newRun();
 
 function handleEvents(events) {
-  const { hole, fx, cam } = game;
+  const { hole, fx, cam, progress } = game;
+  const unlocks = [];
   for (const ev of events) {
     if (ev.type === 'swallow') {
       // Effects budget: past ~200 live particles, skip new bursts entirely.
@@ -78,15 +106,23 @@ function handleEvents(events) {
       } else {
         audio.pop(ev.r / hole.r);
       }
+      // Achievements: first-building + running eaten-count milestones.
+      unlocks.push(...ingest(progress, { type: 'swallow', emoji: ev.e }));
+      unlocks.push(...ingest(progress, { type: 'eaten', count: hole.eatenCount }));
     } else if (ev.type === 'combo') {
       audio.comboTick(ev.mult);
+      unlocks.push(...ingest(progress, { type: 'combo', mult: ev.mult }));
     } else if (ev.type === 'levelup') {
       audio.levelUp(intensityForLevel(ev.level), { milestone: isMilestone(ev.level) });
       spawnLevelUp(game.levelFx, ev.level, hole, { reducedMotion });
       if (!reducedMotion) shake(cam, Math.min(hole.r * 0.35, 24));
+      // Radius milestones are cheapest to check on level-up (hole.r only
+      // changes then), so we ingest the current radius here.
+      unlocks.push(...ingest(progress, { type: 'radius', r: hole.r }));
     }
   }
   hud.handleEvents(events);
+  applyUnlocks(unlocks);
 }
 
 let last = performance.now();
@@ -116,6 +152,16 @@ function frame(nowMs) {
       const band = bandAt(hole.x, hole.y);
       const theme = themeAt(hole.x, hole.y);
       hud.setArea(`${band}|${theme.key}`, themeDisplayName(theme, band));
+      // Achievements: theme visits (dedupe by key) + cycle crossings.
+      if (theme.key !== game.shownTheme) {
+        game.shownTheme = theme.key;
+        applyUnlocks(ingest(game.progress, { type: 'themeVisit', key: theme.key }));
+      }
+      const cycle = cycleForBand(band);
+      if (cycle !== game.shownCycle) {
+        game.shownCycle = cycle;
+        applyUnlocks(ingest(game.progress, { type: 'cycle', cycle }));
+      }
     }
   } else if (game.mode === 'menu') {
     // Attract mode: drift over the world behind the title.
@@ -148,6 +194,7 @@ function pauseGame() {
   if (game.mode !== 'playing') return;
   game.mode = 'paused';
   saveBest(game.hole);
+  saveMeta();
   hud.showPause();
 }
 
@@ -168,6 +215,15 @@ input.onAnyGesture = () => {
 document.getElementById('btn-play').addEventListener('click', startRun);
 document.getElementById('btn-pause').addEventListener('click', pauseGame);
 document.getElementById('btn-resume').addEventListener('click', resumeGame);
+
+// Collection overlay is reachable from both the start screen and the pause
+// panel. It stacks over whichever overlay is showing; closing returns to it.
+for (const id of ['btn-collection-start', 'btn-collection-pause']) {
+  document.getElementById(id).addEventListener('click', () => {
+    audio.uiClick();
+    collectionUI.open();
+  });
+}
 
 const btnRestart = document.getElementById('btn-restart');
 let restartArmed = false;
@@ -200,7 +256,7 @@ window.addEventListener('resize', () => R.resize());
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pauseGame();
 });
-window.addEventListener('beforeunload', () => saveBest(game.hole));
+window.addEventListener('beforeunload', () => { saveBest(game.hole); saveMeta(); });
 setInterval(() => {
   if (game.mode === 'playing') saveBest(game.hole);
 }, 5000);
@@ -217,7 +273,10 @@ window.__game = {
   get sw() { return game.sw; },
   get fx() { return game.fx; },
   get levelFx() { return game.levelFx; },
+  get progress() { return game.progress; },
   worldToScreen(x, y) {
     return worldToScreen(game.cam, R.w, R.h, x, y);
   },
+  // e2e-only: force an unlock banner to check the queue + ribbon anim.
+  __showUnlock(entry) { collectionUI.showUnlock(entry); },
 };

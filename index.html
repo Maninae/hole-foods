@@ -35,6 +35,13 @@
     </div>
     <div id="combo" class="hidden">×2</div>
     <div id="toast" class="hidden"></div>
+    <div id="unlock-banner" class="hidden" role="status" aria-live="polite">
+      <div class="unlock-emoji" aria-hidden="true"></div>
+      <div class="unlock-text">
+        <div class="unlock-eyebrow">Unlocked</div>
+        <div class="unlock-name"></div>
+      </div>
+    </div>
   </div>
 
   <div id="start" class="overlay">
@@ -44,6 +51,9 @@
       <p class="tagline">You are a hole. Everything fits, eventually.</p>
       <p id="best-line">Eat everything. Grow forever.</p>
       <button id="btn-play" class="big-btn">Play</button>
+      <div class="btn-row">
+        <button id="btn-collection-start" class="mid-btn">🗺️ Collection</button>
+      </div>
       <p class="hints">Arrow keys / WASD&ensp;·&ensp;drag on touch</p>
     </div>
   </div>
@@ -54,9 +64,31 @@
       <button id="btn-resume" class="big-btn">Resume</button>
       <div class="btn-row">
         <button id="btn-restart" class="mid-btn">↺ Restart run</button>
+        <button id="btn-collection-pause" class="mid-btn">🗺️ Collection</button>
         <button id="btn-sound" class="mid-btn">🔊 Sound: on</button>
       </div>
       <p class="hints">Esc / P pauses&ensp;·&ensp;roam outward — everything gets bigger</p>
+    </div>
+  </div>
+
+  <div id="collection" class="overlay hidden" aria-hidden="true">
+    <div class="panel collection-panel">
+      <button id="btn-collection-close" class="collection-close" aria-label="Close">×</button>
+      <h2>Collection</h2>
+      <section class="collection-section">
+        <div class="collection-heading">
+          <h3>Discoveries</h3>
+          <span class="collection-progress" id="collection-progress-themes">0 / 18</span>
+        </div>
+        <div class="sticker-grid" id="sticker-grid"></div>
+      </section>
+      <section class="collection-section">
+        <div class="collection-heading">
+          <h3>Achievements</h3>
+          <span class="collection-progress" id="collection-progress-achievements">0 / 0</span>
+        </div>
+        <ul class="achievement-list" id="achievement-list"></ul>
+      </section>
     </div>
   </div>
 

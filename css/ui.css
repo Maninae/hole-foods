@@ -281,8 +281,256 @@ h2 {
   100% { transform: translateX(-50%) translateY(0); opacity: 1; }
 }
 
+/* --- Unlock banner --------------------------------------------------- */
+
+/* Sits at the bottom, centered — well clear of the top-center area toast
+   (#toast) so the two never collide. Gold-trimmed ribbon. */
+#unlock-banner {
+  position: absolute;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 22px 12px 16px;
+  border-radius: 20px;
+  background: linear-gradient(135deg,
+    rgba(60, 30, 90, 0.9), rgba(30, 15, 56, 0.9));
+  border: 1.5px solid var(--gold);
+  box-shadow: 0 8px 26px rgba(8, 3, 20, 0.55),
+              0 0 0 1px rgba(255, 209, 102, 0.2) inset,
+              0 0 22px rgba(255, 209, 102, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  max-width: min(88vw, 380px);
+  transition: opacity 0.35s;
+}
+
+#unlock-banner .unlock-emoji {
+  font-size: 34px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(10, 4, 24, 0.5));
+}
+
+#unlock-banner .unlock-text { min-width: 0; }
+
+#unlock-banner .unlock-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+  opacity: 0.9;
+  margin-bottom: 2px;
+}
+
+#unlock-banner .unlock-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--cream);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+#unlock-banner.ribbon-in {
+  animation: ribbon-in 0.55s cubic-bezier(0.2, 1.4, 0.35, 1);
+}
+
+@keyframes ribbon-in {
+  0%   { transform: translateX(-50%) translateY(24px); opacity: 0; }
+  60%  { transform: translateX(-50%) translateY(-4px); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #unlock-banner.ribbon-in { animation: none; }
+}
+
+/* --- Collection overlay ---------------------------------------------- */
+
+.collection-panel {
+  position: relative;
+  text-align: left;
+  padding: clamp(24px, 4vw, 40px) clamp(24px, 4vw, 40px)
+           clamp(20px, 3vw, 32px);
+  max-width: min(94vw, 720px);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.collection-panel h2 {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.collection-section { margin-top: clamp(14px, 2.4vw, 22px); }
+
+.collection-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.collection-heading h3 {
+  font-size: clamp(15px, 2.2vw, 18px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cream);
+  opacity: 0.9;
+}
+
+.collection-progress {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.collection-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--cream);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-line);
+  transition: background 0.15s, transform 0.1s;
+}
+
+.collection-close:hover { background: rgba(255, 255, 255, 0.16); }
+.collection-close:active { transform: scale(0.92); }
+
+/* --- Sticker grid ---------------------------------------------------- */
+
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+}
+
+.sticker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 10px 4px 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-line);
+  text-align: center;
+  transition: transform 0.12s, background 0.15s;
+}
+
+.sticker.locked { opacity: 0.42; filter: grayscale(0.8); }
+
+.sticker.unlocked {
+  background: linear-gradient(160deg,
+    rgba(255, 209, 102, 0.18), rgba(255, 159, 67, 0.08));
+  border-color: rgba(255, 209, 102, 0.42);
+  box-shadow: 0 4px 12px rgba(255, 159, 67, 0.14);
+}
+
+.sticker-emoji {
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1;
+  filter: drop-shadow(0 2px 3px rgba(10, 4, 24, 0.35));
+}
+
+.sticker-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--cream);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  min-height: 26px;
+}
+
+.sticker.locked .sticker-name {
+  opacity: 0.7;
+  letter-spacing: 0.16em;
+}
+
+/* --- Achievement list ------------------------------------------------ */
+
+.achievement-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.achievement {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-line);
+  transition: background 0.15s;
+}
+
+.achievement.locked { opacity: 0.5; filter: grayscale(0.7); }
+
+.achievement.unlocked {
+  background: linear-gradient(90deg,
+    rgba(255, 209, 102, 0.16), rgba(255, 209, 102, 0.02) 80%);
+  border-color: rgba(255, 209, 102, 0.42);
+}
+
+.achievement-emoji {
+  font-size: 26px;
+  line-height: 1;
+  flex-shrink: 0;
+  width: 34px;
+  text-align: center;
+  filter: drop-shadow(0 2px 3px rgba(10, 4, 24, 0.35));
+}
+
+.achievement-body { min-width: 0; flex: 1; }
+
+.achievement-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cream);
+  line-height: 1.2;
+}
+
+.achievement.unlocked .achievement-name { color: var(--gold); }
+
+.achievement-desc {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cream);
+  opacity: 0.75;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
 @media (max-width: 640px) {
   #level-badge { width: 44px; height: 44px; font-size: 20px; }
   #level-bar { width: 84px; }
   .hud-right button { width: 44px; height: 44px; }
+  .sticker-grid { grid-template-columns: repeat(3, 1fr); }
+  .sticker-name { font-size: 10.5px; min-height: 24px; }
+  .collection-panel { padding: 20px 18px; }
+  #unlock-banner { bottom: calc(20px + env(safe-area-inset-bottom)); }
+  #unlock-banner .unlock-name { font-size: 15px; max-width: 200px; }
 }

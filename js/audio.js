@@ -123,6 +123,15 @@ export function uiClick() {
   tone('sine', 520, 380, actx.currentTime, 0.06, 0.12);
 }
 
+// A soft two-note chime for a newly-unlocked achievement or discovery.
+// Distinct from levelUp() (arpeggio) and pop() — a quiet, positive ping.
+export function unlockPing() {
+  if (!actx) return;
+  const t0 = actx.currentTime;
+  tone('triangle', 880, 880, t0, 0.14, 0.14);
+  tone('triangle', 1318.5, 1318.5, t0 + 0.09, 0.18, 0.12);
+}
+
 // A very soft two-oscillator pad; call once when a run starts.
 export function startAmbient() {
   if (!actx || ambientNodes) return;
