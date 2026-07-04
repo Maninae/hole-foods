@@ -37,6 +37,7 @@ Pin a world with `?seed=anything` — the same seed reproduces the same terrain 
 - **Angular patchwork world.** 18 themes tile the world as roughly-square angular sectors — walk sideways and you cross into a different theme without leaving your size band. Only distance from origin decides the scale tier; angle decides the theme.
 - **Fractal endless scaling.** Every 6 bands the world's size multiplier steps ×6 — biome widths, chunk sizes, item radii, and camera zoom all scale together. Play stays identical at 44 cm, 44 m, and 44 km.
 - **BigInt scoring.** Score is exact-integer end-to-end (BigInt in code, `56.0M`/`4.2B`-style in the HUD). No wraparound at any depth.
+- **Sticker collection.** First visit to each of the 18 themes earns its sticker; a checklist of size, appetite, and exploration achievements sits alongside. Progress persists across runs — open 🗺️ Collection from the start or pause screen.
 - **Keys / touch only.** No mouse-tracking, no auto-aim. Arrow keys, WASD, or touch drag.
 - **Zero assets.** No build, no runtime dependencies, no images or audio files. Emoji are the art; WebAudio synthesizes every pop, gulp, and level-up chime at play time.
 
