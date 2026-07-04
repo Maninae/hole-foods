@@ -26,6 +26,13 @@ const DESERT_ITEM_TIER = 4;
 // A desert chunk still gets a single full-table surprise this often — a rare
 // giant sighting between oases.
 const DESERT_SURPRISE_PROB = 0.05;
+// Starter-oasis composition bias: inside STARTER_RADIUS, CLUSTERS draw from
+// items with base radius <= this cap. Clusters (5-6 objects of one item) are
+// what visually dominate spawn — a cluster of watermelons reads as "big
+// wall of inedibles". Singles keep the full-table draw so a couple of
+// aspirational giants still tease near spawn; the full ladder returns
+// outside the starter radius, and the giants show up along the outer meadow.
+const STARTER_ITEM_MAX_R = 25;
 
 export function chunkSizeAt(level) {
   return CONFIG.CHUNK * Math.pow(CONFIG.CYCLE_SIZE_MULT, level);
@@ -132,7 +139,12 @@ function generateChunk(world, level, cx, cy) {
 
   if (isOasis) {
     // Rich: several decorative clusters plus a bunch of scattered singles.
-    const clusterItems = biome.items.filter((it) => it.r <= CLUSTER_MAX_BASE_R);
+    // Inside the starter radius, clusters use the small-item cap so a
+    // cluster of watermelons doesn't wall off the spawn view.
+    const rCap = centerDist < CONFIG.STARTER_RADIUS
+      ? STARTER_ITEM_MAX_R
+      : CLUSTER_MAX_BASE_R;
+    const clusterItems = biome.items.filter((it) => it.r <= rCap);
     const nClusters = clusterItems.length === 0 ? 0 : rng.int(2, 3);
     for (let ci = 0; ci < nClusters; ci++) {
       const item = rng.pickWeighted(clusterItems, (it) => it.w);
