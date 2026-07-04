@@ -36,10 +36,13 @@ const sw = createSwallow();
 const rHistory = [];                 // { t, r } samples for doubling-time
 const bandFirstReached = new Map();  // band -> sim seconds
 const cycleFirstReached = new Map(); // cycle -> sim seconds
+const levelFirstReached = new Map(); // level -> sim seconds (tuning aid)
+levelFirstReached.set(1, 0);
 let eaten = 0;
 let now = 0;
 let lastReport = -REPORT_EVERY;
 let lastHistoryT = -Infinity;
+let lastKnownLevel = 1;
 
 function pickTarget() {
   const fitLimit = hole.r * CONFIG.FIT_FACTOR;
@@ -119,6 +122,14 @@ while (now < totalTime + 1e-9) {
   const events = swallowUpdate(sw, DT, now, world, hole);
   for (const ev of events) if (ev.type === 'swallow') eaten++;
 
+  // Record level milestones — the early-game feel lives in these timestamps.
+  if (hole.level !== lastKnownLevel) {
+    for (let L = lastKnownLevel + 1; L <= hole.level; L++) {
+      if (!levelFirstReached.has(L)) levelFirstReached.set(L, now);
+    }
+    lastKnownLevel = hole.level;
+  }
+
   if (now - lastHistoryT >= HISTORY_EVERY) {
     rHistory.push({ t: now, r: hole.r });
     lastHistoryT = now;
@@ -149,4 +160,8 @@ for (const [band, t] of [...bandFirstReached.entries()].sort((a, b) => a[0] - b[
 console.log('# First reached cycle:');
 for (const [cycle, t] of [...cycleFirstReached.entries()].sort((a, b) => a[0] - b[0])) {
   console.log(`#   cycle ${cycle}: ${t.toFixed(1)}s`);
+}
+console.log('# First reached level:');
+for (const [level, t] of [...levelFirstReached.entries()].sort((a, b) => a[0] - b[0])) {
+  console.log(`#   level ${level}: ${t.toFixed(1)}s`);
 }
