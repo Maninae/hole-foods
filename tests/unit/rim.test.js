@@ -33,29 +33,41 @@ function runSeconds(sw, world, hole, seconds, startNow = 0) {
   return events;
 }
 
+// Distances scale with the (starter) hole radius so bumps to CONFIG.HOLE_R0
+// keep these overhang scenarios exactly at the same fractions of the rim.
+// The sim-tuned starter radius currently lands at 26.4 (see CLAUDE.md).
+
 test('an object beyond the rim is completely inert — no vacuum', () => {
-  const obj = makeObj(0, 50, 0, 10); // hole r=22 at origin; gap of 18 units
+  // gap = 28 units past the rim (well outside).
+  const obj = makeObj(0, CONFIG.HOLE_R0 + 28, 0, 10);
   const { world, hole, sw } = makeFixture([obj]);
   const events = runSeconds(sw, world, hole, 1.0);
-  assert.equal(obj.x, 50, 'must not be attracted');
+  assert.equal(obj.x, CONFIG.HOLE_R0 + 28, 'must not be attracted');
   assert.equal(obj.vx, 0);
   assert.equal(obj.tilt, 0);
   assert.equal(events.length, 0);
 });
 
 test('barely overlapping the rim: teeters (tilts, wobbles) but does not slide in', () => {
-  // d=29, r=10, hole r=22: overhang = (32-29)/20 = 0.15 — supported, unstable-looking
-  const obj = makeObj(0, 29, 0, 10);
+  // Place the object so that overhang = (r_hole + r_obj - d) / 2·r_obj = 0.15
+  // — supported, tilts but shouldn't slide.
+  const rObj = 10;
+  const overhang = 0.15;
+  const d = CONFIG.HOLE_R0 + rObj - overhang * 2 * rObj;
+  const obj = makeObj(0, d, 0, rObj);
   const { world, hole, sw } = makeFixture([obj]);
   runSeconds(sw, world, hole, 1.0);
   assert.ok(obj.tilt > 0, `should tilt at the edge, tilt=${obj.tilt}`);
   assert.equal(obj.state, 'idle');
-  assert.ok(obj.x > 28, `should hold its ground, x=${obj.x}`);
+  assert.ok(obj.x > d - 1, `should hold its ground, x=${obj.x}`);
 });
 
 test('substantially overhung: slides over the edge and tips in', () => {
-  // d=25: overhang = (32-25)/20 = 0.35 — past the slide threshold
-  const obj = makeObj(0, 25, 0, 10);
+  // overhang = 0.35 — past the slide threshold.
+  const rObj = 10;
+  const overhang = 0.35;
+  const d = CONFIG.HOLE_R0 + rObj - overhang * 2 * rObj;
+  const obj = makeObj(0, d, 0, rObj);
   const { world, hole, sw } = makeFixture([obj]);
   const events = runSeconds(sw, world, hole, 3.0);
   const swallows = events.filter((e) => e.type === 'swallow');
@@ -64,14 +76,18 @@ test('substantially overhung: slides over the edge and tips in', () => {
 });
 
 test('center over the void: tips immediately', () => {
-  const obj = makeObj(0, 20, 0, 10); // d=20 < hole r=22
+  // Center of object inside the hole's rim.
+  const obj = makeObj(0, CONFIG.HOLE_R0 - 2, 0, 10);
   const { world, hole, sw } = makeFixture([obj]);
   swallowUpdate(sw, 1 / 60, 0, world, hole);
   assert.equal(obj.state, 'falling');
 });
 
 test('tilt relaxes when the hole moves away', () => {
-  const obj = makeObj(0, 29, 0, 10);
+  const rObj = 10;
+  const overhang = 0.15;
+  const d = CONFIG.HOLE_R0 + rObj - overhang * 2 * rObj;
+  const obj = makeObj(0, d, 0, rObj);
   const { world, hole, sw } = makeFixture([obj]);
   runSeconds(sw, world, hole, 0.5);
   assert.ok(obj.tilt > 0);
@@ -81,7 +97,8 @@ test('tilt relaxes when the hole moves away', () => {
 });
 
 test('too-big objects never teeter or fall, even dead-center', () => {
-  const obj = makeObj(0, 0, 0, 30); // r=30 > 22 * FIT_FACTOR
+  // r > hole_r * FIT_FACTOR — inedible regardless of position.
+  const obj = makeObj(0, 0, 0, CONFIG.HOLE_R0 + 10);
   const { world, hole, sw } = makeFixture([obj]);
   const events = runSeconds(sw, world, hole, 1.0);
   assert.equal(obj.state, 'idle');

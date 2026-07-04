@@ -94,8 +94,8 @@ test('eat reports level-ups', () => {
 });
 
 test('bigger holes move faster in world units', () => {
-  assert.ok(holeSpeed(44) > holeSpeed(22));
-  assert.ok(holeSpeed(22) === CONFIG.SPEED_BASE);
+  assert.ok(holeSpeed(2 * CONFIG.HOLE_R0) > holeSpeed(CONFIG.HOLE_R0));
+  assert.ok(holeSpeed(CONFIG.HOLE_R0) === CONFIG.SPEED_BASE);
 });
 
 test('movement eases toward the input direction and respects dt', () => {
