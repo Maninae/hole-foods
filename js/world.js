@@ -7,7 +7,7 @@
 import { CONFIG } from './config.js';
 import { chunkRng } from './rng.js';
 import {
-  bandIndex, biomeForBand, cycleForBand, sizeMultForBand, pointsFor,
+  bandIndex, themeAt, cycleForBand, sizeMultForBand, pointsFor,
 } from './catalog.js';
 import { PATTERN_KEYS, layoutCluster } from './patterns.js';
 
@@ -97,9 +97,14 @@ function generateChunk(world, level, cx, cy) {
   const rng = chunkRng(world.seed, cx, cy, `L${level}`);
   const x0 = cx * C;
   const y0 = cy * C;
-  const centerDist = Math.hypot(x0 + C / 2, y0 + C / 2);
+  const cxWorld = x0 + C / 2;
+  const cyWorld = y0 + C / 2;
+  const centerDist = Math.hypot(cxWorld, cyWorld);
   const band = bandIndex(centerDist);
-  const biome = biomeForBand(band);
+  // Themes are a patchwork of angular sectors, not concentric rings — the
+  // chunk's THEME is decided by its center's position (band + sector), but
+  // its SIZE multiplier stays purely radial so the fractal invariant holds.
+  const biome = themeAt(cxWorld, cyWorld);
   const mult = sizeMultForBand(band);
   const chunk = { level, cx, cy, band, objects: [], decals: [] };
   let idx = 0;

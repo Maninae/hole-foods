@@ -402,15 +402,79 @@ export function bandRange(band) {
   return { start: start + (band - N * k) * width, width };
 }
 
-// Theme rotation across the pool: `cycle * N + slot` walks the pool in
-// order, wrapping every THEMES.length bands. Cycle 0 hits themes 0..N-1
-// (the classic six by construction), cycle 1 hits N..2N-1, and so on.
+// --- Patchwork theme cells ---------------------------------------------
+// Themes tile the world as roughly-square angular sectors within each band
+// annulus, NOT as concentric rings — otherwise players notice the layered
+// organization. Radial distance still decides SIZE (via sizeMultForBand);
+// angle+distance together decide THEME. Band 0 is hard-coded to Berry
+// Meadow so the spawn area and the world's starter guarantee stay stable.
+// The mapping is deterministic and seed-independent — the ground painter
+// must be able to compute it without any world seed in hand.
+
+// xmur3-style 32-bit hash of `${band}:${sector}`. Same mixer/finalizer as
+// rng.js but with a fixed prefix seed — the mapping must NOT depend on
+// world.seed.
+function cellHash(band, sector) {
+  const str = `${band}:${sector}`;
+  let h = 2246822519 ^ str.length; // fixed nothing-up-my-sleeve seed
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+// How many angular sectors this band's annulus is split into. Chosen so
+// each cell's arc-length ~= the band's radial width — cells are roughly
+// square. Band 0 collapses to a single sector so the spawn area is one
+// contiguous meadow.
+export function sectorCount(band) {
+  if (band <= 0) return 1;
+  const { start, width } = bandRange(band);
+  return Math.max(1, Math.round((2 * Math.PI * (start + width / 2)) / width));
+}
+
+// Sector index for an angle (radians) at a given band. Wraps modulo the
+// sector count. Angle 0 is the +x axis, growing counter-clockwise, so a
+// straight ray outward may cross sector boundaries as it moves through
+// increasingly-fine annuli — which is what makes the world a patchwork
+// instead of a set of pie wedges.
+export function sectorForAngle(band, angle) {
+  const n = sectorCount(band);
+  if (n <= 1) return 0;
+  let a = angle / (2 * Math.PI); // −0.5 .. 0.5 (atan2 range)
+  a -= Math.floor(a);            // 0 .. 1
+  return Math.floor(a * n) % n;
+}
+
+// Theme lookup by cell coordinates. Band 0 → meadow (spawn is home).
+// Otherwise pick via cellHash mod THEMES.length. Sector is normalized so
+// callers don't have to mod it themselves.
+export function themeFor(band, sector) {
+  if (band <= 0) return THEMES[0];
+  const n = sectorCount(band);
+  const s = ((sector % n) + n) % n;
+  return THEMES[cellHash(band, s) % THEMES.length];
+}
+
+// Primary theme-lookup API for anything that has a world position — used
+// by world.js during chunk generation and by ground.js during painting.
+export function themeAt(x, y) {
+  const dist = Math.hypot(x, y);
+  const band = bandIndex(dist);
+  if (band === 0) return THEMES[0];
+  return themeFor(band, sectorForAngle(band, Math.atan2(y, x)));
+}
+
+// Band-only fallback for display code that only has a band (e.g. the HUD
+// biome toast) — returns a stable sector-0 theme so the toast doesn't
+// flicker as the hole moves inside one band's annulus. TODO: main.js
+// should ideally key hud.setBand on (band, sector) so the toast follows
+// the actual cell you're crossing into; leaving that to whoever wires HUD.
 export function biomeForBand(band) {
-  const N = CONFIG.BANDS_PER_CYCLE;
-  const cycle = Math.floor(band / N);
-  const slot = ((band % N) + N) % N;
-  const idx = ((cycle * N + slot) % THEMES.length + THEMES.length) % THEMES.length;
-  return THEMES[idx];
+  return themeFor(band, 0);
 }
 
 export function cycleForBand(band) {
