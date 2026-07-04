@@ -6,11 +6,40 @@ import assert from 'node:assert/strict';
 import { THEMES } from '../../js/catalog.js';
 import {
   ACHIEVEMENTS, THEMES_ORDER, BUILDING_EMOJI, VERSION,
-  ACHIEVEMENT_BRANCHES,
+  ACHIEVEMENT_BRANCHES, STORAGE_KEY,
   createProgress, ingest,
-  serializeProgress, deserializeProgress,
+  serializeProgress, deserializeProgress, saveProgress,
   isAcyclic, achievementById,
 } from '../../js/achievements.js';
+
+test('saveProgress unions with existing storage instead of clobbering (multi-tab safety)', () => {
+  const store = new Map();
+  const storage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, v),
+  };
+  // Tab A already saved richer progress...
+  const rich = createProgress();
+  rich.discovered.add('meadow');
+  rich.discovered.add('ocean');
+  rich.unlocked.add('size-1m');
+  rich.themeCycles.add('meadow:0');
+  storage.setItem(STORAGE_KEY, serializeProgress(rich));
+  // ...and a stale tab blind-saves a smaller snapshot on top.
+  const stale = createProgress();
+  stale.discovered.add('orchard');
+  stale.unlocked.add('eat-100');
+  saveProgress(stale, storage);
+  // Unlocks are monotonic: the write must be the union, never the snapshot.
+  const merged = deserializeProgress(storage.getItem(STORAGE_KEY));
+  for (const k of ['meadow', 'ocean', 'orchard']) {
+    assert.ok(merged.discovered.has(k), `lost discovery ${k}`);
+  }
+  for (const id of ['size-1m', 'eat-100']) {
+    assert.ok(merged.unlocked.has(id), `lost unlock ${id}`);
+  }
+  assert.ok(merged.themeCycles.has('meadow:0'), 'lost themeCycles entry');
+});
 
 // --- Table integrity ------------------------------------------------------
 

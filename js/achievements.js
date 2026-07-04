@@ -100,6 +100,14 @@ export function saveProgress(progress, storage) {
   const s = storage ?? defaultStorage();
   if (!s) return;
   try {
+    // Union with whatever is already stored before writing: unlocks are
+    // monotonic, and a stale tab's blind setItem must never erase progress
+    // another tab persisted after this one loaded. Merging into the live
+    // progress also converges this tab's in-memory state.
+    const prior = deserializeProgress(s.getItem(STORAGE_KEY));
+    for (const k of prior.discovered) progress.discovered.add(k);
+    for (const id of prior.unlocked) progress.unlocked.add(id);
+    for (const tc of prior.themeCycles) progress.themeCycles.add(tc);
     s.setItem(STORAGE_KEY, serializeProgress(progress));
   } catch {
     /* storage full / disabled — nothing to do */
