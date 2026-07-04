@@ -11,6 +11,7 @@ import { drawGround } from './ground.js';
 import { forEachChunkInRect } from './world.js';
 import { drawEmoji } from './sprites.js';
 import { fallingVisual } from './swallow.js';
+import { levelProgress } from './hole.js';
 import { drawFxWorld, drawFxText } from './particles.js';
 import { CONFIG } from './config.js';
 
@@ -100,6 +101,28 @@ function drawHole(ctx, hole, sw, time, screenScale) {
   ctx.beginPath();
   ctx.arc(x, y, r + lw * 0.55, 0, Math.PI * 2);
   ctx.stroke();
+
+  // Level-progress meter around the mouth: fills clockwise from 12 o'clock
+  // as the hole approaches its next size milestone. Drawn in the ground pass
+  // so it hugs the rim ellipse like everything else. Width scales with the
+  // hole so it stays ~4-6 screen px at any zoom (like the rim itself).
+  const progress = levelProgress(r);
+  const meterW = Math.max(lw * 1.1, r * 0.075);
+  const meterR = r + lw * 1.2 + meterW * 1.4;
+  ctx.strokeStyle = 'rgba(20, 10, 32, 0.28)';
+  ctx.lineWidth = meterW + r * 0.02;
+  ctx.beginPath();
+  ctx.arc(x, y, meterR, 0, Math.PI * 2);
+  ctx.stroke();
+  if (progress > 0.005) {
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = meterW;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(x, y, meterR, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
 }
 
 export function renderScene(R, state) {
