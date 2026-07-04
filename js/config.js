@@ -10,8 +10,8 @@ export const CONFIG = {
   UNLOAD_CHUNKS: 14,      // unload generated chunks farther than this many chunks from camera
 
   // Hole
-  HOLE_R0: 22,            // starting radius (world units)
-  GROWTH_K: 0.02,         // fraction of swallowed object area added to hole area
+  HOLE_R0: 26.4,          // starting radius (world units)
+  GROWTH_K: 0.0288,       // fraction of swallowed object area added to hole area
   FIT_FACTOR: 0.95,       // object fits if obj.r <= hole.r * FIT_FACTOR
   LEVEL_R_GROWTH: 1.22,   // level n at radius HOLE_R0 * LEVEL_R_GROWTH^(n-1)
   SPEED_BASE: 260,        // world units/sec at starting size
