@@ -251,4 +251,6 @@
   .collection-panel { padding: 20px 18px; }
   #unlock-banner { bottom: calc(20px + env(safe-area-inset-bottom)); }
   #unlock-banner .unlock-name { font-size: 15px; max-width: 200px; }
+  /* Tighter tracking so "ACHIEVEMENT UNLOCKED" stays on one line. */
+  #unlock-banner .unlock-eyebrow { letter-spacing: 0.13em; white-space: nowrap; }
 }
