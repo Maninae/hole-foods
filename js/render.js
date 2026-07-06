@@ -256,22 +256,27 @@ export function renderScene(R, state) {
   const baseShadowAlpha = 0.18;
   for (const item of visible) {
     let cx; let cy; let cr; let alpha = baseShadowAlpha;
+    let widen = 1;
     if (item.type === 'single') {
       const o = item.obj;
       cx = o.x; cy = o.y; cr = o.r;
     } else {
       cx = item.tower.baseX; cy = item.tower.baseY; cr = item.tower.unitR;
+      // Widen and darken the tower base shadow so the column reads as ONE
+      // object sitting on the ground, not a chain of independent sprites.
+      widen = CONFIG.STACK_SHADOW_WIDEN;
+      alpha = baseShadowAlpha * CONFIG.STACK_SHADOW_DARKEN;
       const tp = sw.topples.find((t2) => t2.stackId === item.tower.stackId);
       if (tp) {
         const k = Math.min(1, tp.t / tp.duration);
-        alpha = baseShadowAlpha * (1 - k);
+        alpha *= (1 - k);
         if (alpha <= 0.001) continue; // fully faded — skip the ellipse entirely
       }
     }
     ctx.fillStyle = `rgba(25, 20, 50, ${alpha})`;
     const sx = cx * t.scale + t.tx;
     const sy = cy * t.scaleY + t.ty;
-    const rx = cr * 0.8 * t.scale;
+    const rx = cr * 0.8 * t.scale * widen;
     const ry = rx * 0.38;
     ctx.beginPath();
     ctx.ellipse(sx, sy + ry * 0.35, rx, ry, 0, 0, Math.PI * 2);
@@ -280,12 +285,13 @@ export function renderScene(R, state) {
 
   // Sprites, y-sorted. Singles are lifted so they stand on the ground plane;
   // towers draw as a vertical strip of upright sprites, bottom-up, with the
-  // base's teeter lean amplifying up the column.
+  // base's teeter lean amplifying up the column and a gentle idle sway for
+  // tall columns (the Part A verticality cue).
   for (const item of visible) {
     if (item.type === 'single') {
       drawSingle(ctx, item.obj, hole, t, dpr);
     } else {
-      drawTower(ctx, item.tower, hole, sw, t, dpr);
+      drawTower(ctx, item.tower, hole, sw, t, dpr, time);
     }
   }
 

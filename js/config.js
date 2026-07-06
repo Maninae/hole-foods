@@ -62,10 +62,54 @@ export const CONFIG = {
   STACK_HEIGHT_MAX: 14,         // typical tallest tower
   STACK_BEACON_MIN: 12,         // desert beacons at least this tall
   STACK_BEACON_MAX: 24,
-  STACK_UNIT_OVERLAP: 0.85,     // screen-Y offset between stacked units (fraction of unit height)
+  STACK_UNIT_OVERLAP: 0.55,     // screen-Y step between stacked units (fraction of unit height).
+                                // 0.55 = each unit visibly sits ON the one below (~half overlap),
+                                // so a still tower reads unambiguously as vertical vs. a ground line.
   STACK_LEAN_ACCUM: 0.08,       // per-idx lean amplification up the column
-  STACK_SLUMP_TIME: 0.12,       // seconds for the column to drop one unit-height
-  STACK_TOPPLE_TIME: 0.5,       // seconds for a 90° topple (matches FALL_TIME)
-  STACK_TOPPLE_MIN: 8,          // alive units required for the tall-tower topple path
+  STACK_JITTER_X: 0.08,         // per-unit x-jitter, ±fraction of unit diameter (hand-stacked feel)
+  STACK_JITTER_ROT_DEG: 3,      // per-unit rotation jitter (±degrees). Deterministic per (stackId, idx)
+                                // so the column doesn't shimmer frame to frame.
+  STACK_PERSPECTIVE: 0.015,     // scale gain per idx up the column (camera-above → higher = closer)
+  STACK_PERSPECTIVE_CAP: 0.25,  // cap on total perspective scale gain (a 24-tall tower tops out here)
+  STACK_SWAY_TOP_DEG: 2.5,      // idle-sway amplitude at the TIP of a tall column (degrees).
+                                // Scales down with height so a 6-unit pile barely moves. THE cue
+                                // that separates a live column from a ground line — ground never moves.
+  STACK_SWAY_PERIOD: 3.2,       // seconds per sway cycle; phase from stackId hash
+  STACK_SWAY_HEIGHT_REF: 10,    // sway hits full amplitude at this many units of height
+  STACK_CAPSULE_ALPHA: 0.14,    // soft dark backdrop behind a column — ambient occlusion, binds units
+  STACK_CAPSULE_WIDTH: 1.05,    // capsule width, multiples of unit diameter (slightly wider than sprite)
+  STACK_SHADOW_WIDEN: 1.35,     // tower base shadow is wider than a single's (visually anchors the column)
+  STACK_SHADOW_DARKEN: 1.5,     // and darker
+  STACK_SLUMP_TIME: 0.12,       // (legacy — Part B unified slump into the avalanche system)
+  STACK_TOPPLE_TIME: 0.5,       // (legacy — same)
+  STACK_TOPPLE_MIN: 8,          // alive units required for the tall-tower avalanche path (else slump-avalanche)
   STACK_TOPPLE_FLOATER_CAP: 10, // temporarily raised score-floater cap during a collapse
+
+  // --- Avalanche collapse (Part B) ---
+  // On base tip, the column detaches BOTTOM-UP with a stagger; each unit
+  // becomes a ballistic body with fake z (height above ground), horizontal
+  // velocity out into a cone away from the hole, gravity + 1-2 damped
+  // bounces, then settles as an ordinary idle. Deterministic final resting
+  // positions (seeded per unit) let the landing-cap contract stay testable.
+  STACK_AVAL_STAGGER: 0.045,       // seconds between successive unit detaches (bottom-up)
+  STACK_AVAL_PRELEAN_TIME: 0.15,   // Jenga "losing balance" beat before first detach (tall columns only)
+  STACK_AVAL_PRELEAN_DEG: 10,      // pre-lean angle (degrees) — enough to read, not enough to launch
+  STACK_AVAL_GRAVITY: 3200,        // z-gravity in world-units / s²
+  STACK_AVAL_LAUNCH_VZ: 180,       // initial upward velocity of a detaching unit (world-units / s)
+  STACK_AVAL_LAUNCH_VZ_PER_IDX: 40, // extra initial vz per idx up the column (top launches farther)
+  STACK_AVAL_CONE_DEG: 35,         // half-angle of the horizontal spread cone away from the hole
+  STACK_AVAL_HSPEED_BASE: 90,      // base horizontal speed on detach
+  STACK_AVAL_HSPEED_PER_IDX: 55,   // extra horizontal speed per idx (higher units fling farther)
+  STACK_AVAL_SLUMP_HSPEED: 30,     // horizontal magnitude in a short-pile slump (units mostly hop down)
+  STACK_AVAL_SPIN_RATE_DEG: 540,   // max spin rate (deg/s) — signed random per unit
+  STACK_AVAL_BOUNCE_VZ: -0.4,      // vz multiplier on landing (elastic-ish)
+  STACK_AVAL_BOUNCE_HORIZ: 0.55,   // horizontal-velocity multiplier on bounce (friction)
+  STACK_AVAL_BOUNCE_SPIN: 0.7,     // spin multiplier on bounce
+  STACK_AVAL_MIN_VZ_SETTLE: 25,    // once |vz| drops below this on landing, unit is settled
+  STACK_AVAL_MAX_BOUNCES: 2,       // fallback cap on bounces (in case damping picks a slow decay)
+  STACK_AVAL_MAX_FLIGHT: 3.5,      // seconds — hard cap on airborne time so a stuck unit can't lock
+  STACK_AVAL_DUST_INTERVAL: 0.06,  // min seconds between dust puffs during an avalanche (throttle)
+  STACK_AVAL_THUMP_INTERVAL: 0.11, // min seconds between thump sfx during an avalanche (throttle)
+  STACK_AVAL_MOUND_SPREAD: 0.9,    // final mound spread as fraction of the 2×chunkSize landing cap
+                                   // (a tall tower's units settle across ~90% of the cap radius, chaotically)
 };
