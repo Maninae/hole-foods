@@ -112,8 +112,23 @@ export const CONFIG = {
   STACK_AVAL_MAX_FLIGHT: 3.5,      // seconds — hard cap on airborne time so a stuck unit can't lock
   STACK_AVAL_DUST_INTERVAL: 0.06,  // min seconds between dust puffs during an avalanche (throttle)
   STACK_AVAL_THUMP_INTERVAL: 0.11, // min seconds between thump sfx during an avalanche (throttle)
-  STACK_AVAL_MOUND_SPREAD: 0.45,   // tall-tower mound spread, fraction of the 2×chunkSize landing cap
-                                   // (a tall tower's units settle across ~90% of the cap radius, chaotically)
-  STACK_AVAL_SLUMP_RADIUS_MULT: 0.15, // short-pile slump target radius as fraction of unitR × height
-                                     // — small so units mostly hop into the hole, feeding the combo chain
+  STACK_AVAL_MOUND_SPREAD: 0.45,   // (legacy — the sunflower spiral now owns mound extent via
+                                   // spacing * sqrt(H); this remains only as the tall-tower fraction
+                                   // of the S1 cap the spiral gets compressed into when it would
+                                   // exceed 2 x chunkSize.)
+  STACK_AVAL_SLUMP_RADIUS_MULT: 0.15, // (legacy — same reasoning as above; not read by the spiral)
+  STACK_AVAL_SPIRAL_SPACING_TALL: 1.15, // sunflower spacing as fraction of unit DIAMETER (tall).
+                                        // 1.15 places adjacent settle targets ~1.15 diameters apart,
+                                        // above the min-separation threshold that keeps identical
+                                        // sprites from fusing into a caterpillar row under ISO_Y.
+  STACK_AVAL_SPIRAL_SPACING_SLUMP: 0.35, // sunflower spacing for short piles (fraction of unit
+                                         // diameter). Tight so most units still sit inside rim
+                                         // reach and the eat-through-tower combo chain fires.
+  STACK_AVAL_FORWARD_SHIFT: 0.85,  // spiral pivot offset along the away-from-hole direction, in
+                                   // units of spiral spacing. Combined with the behind-half squash
+                                   // this delivers the owner-requested ~60/40 forward bias while
+                                   // keeping the min-separation guarantee.
+  STACK_AVAL_BEHIND_SQUASH: 0.55,  // multiplier applied to the local x of any target that lands
+                                   // behind the pivot (post-shift). Keeps a few units on the
+                                   // hole-adjacent side (the "spilled sideways/short" case).
 };

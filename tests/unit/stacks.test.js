@@ -300,6 +300,60 @@ test('avalanche: final resting positions spread as a mound, not a straight line'
     `expected spread of distances, got min=${dmin.toFixed(2)} max=${dmax.toFixed(2)}`);
 });
 
+// --- Row-signature killer: sector coverage + min-separation -------------
+// The prior random-in-cone target picker had a failure mode where any two
+// settled targets closer than one unit diameter fused into a caterpillar
+// row on screen under the ISO_Y squash. Owner's recorded playtest surfaced
+// this three times in a 48s run. The sunflower-spiral heap enforces min
+// separation for free; these tests guard against a regression.
+
+test('avalanche: settled targets occupy ≥4 of 8 sectors with no sector >50%', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H), 1 / 60);
+  const chunk = world.chunks.get('0:0,0');
+  const landed = chunk.objects.filter((o) => o.stackIdx > 0);
+  assert.ok(landed.length >= 8, `need enough units, got ${landed.length}`);
+  const counts = new Array(8).fill(0);
+  for (const o of landed) {
+    const a = Math.atan2(o.y, o.x);
+    const s = Math.floor(((a + Math.PI) / (2 * Math.PI)) * 8) % 8;
+    counts[s]++;
+  }
+  const occupied = counts.filter((c) => c > 0).length;
+  assert.ok(occupied >= 4,
+    `expected mound to cover >=4 of 8 angular sectors, got ${occupied} (${counts.join(',')})`);
+  const maxSector = Math.max(...counts);
+  assert.ok(maxSector <= Math.floor(landed.length / 2),
+    `no sector should hold more than half the units; got max=${maxSector} of ${landed.length}`);
+});
+
+test('avalanche: minimum pairwise distance between settled targets ≥ 1.0 × unit diameter', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H), 1 / 60);
+  const chunk = world.chunks.get('0:0,0');
+  const landed = chunk.objects.filter((o) => o.stackIdx > 0);
+  assert.ok(landed.length >= 5, `need enough units, got ${landed.length}`);
+  const unitDiameter = 2 * 10; // fixture unitR = 10
+  let minSep = Infinity;
+  let closestPair = null;
+  for (let i = 0; i < landed.length; i++) {
+    for (let j = i + 1; j < landed.length; j++) {
+      const d = Math.hypot(landed[i].x - landed[j].x, landed[i].y - landed[j].y);
+      if (d < minSep) { minSep = d; closestPair = [landed[i].stackIdx, landed[j].stackIdx]; }
+    }
+  }
+  assert.ok(minSep >= unitDiameter,
+    `min pairwise separation ${minSep.toFixed(2)} < 1.0 × unit diameter ${unitDiameter} (idxs ${closestPair})`);
+});
+
 test('avalanche: settled sprite rotations vary across the full circle', () => {
   const H = 14;
   const { world, hole, sw } = makeStackFixture(H);
@@ -459,6 +513,34 @@ test('avalanche: unload mid-collapse does not resurrect stacked units', () => {
       assert.notEqual(o.state, 'stacked',
         `unit at stackIdx ${o.stackIdx} resurrected as 'stacked' after unload+reload`);
     }
+  }
+});
+
+test('slump-avalanche: unload mid-collapse does not resurrect stacked units (H=4 short pile)', () => {
+  // Mirror of the tall-tower unload test, exercising the SLUMP path
+  // (alive < STACK_TOPPLE_MIN). Same M2 invariant: non-base idxs are
+  // stamped at collapse start, not at landing, so a chunk unload+reload
+  // mid-slump cannot resurrect them as 'stacked' on regen.
+  const H = 4;
+  const objects = [];
+  for (let k = 0; k < H; k++) {
+    objects.push(makeStackUnit('SLUMPY', k, 0, 0, 10, k === 0 ? 'idle' : 'stacked'));
+  }
+  const world = createWorld('slumpy');
+  world.chunks.set('0:0,0', { level: 0, cx: 0, cy: 0, band: 0, objects });
+  const hole = createHole();
+  hole.x = -1; hole.y = 0;
+  const sw = createSwallow();
+
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  assert.equal(sw.avalanches?.length, 1, 'expected an avalanche in flight (slump path)');
+  assert.equal(sw.avalanches[0].isTall, false, 'expected the slump path (isTall=false)');
+
+  const eaten = world.eaten.get('0:0,0');
+  assert.ok(eaten, 'eaten set for base chunk must be created at collapse start');
+  for (let k = 1; k < H; k++) {
+    assert.ok(eaten.has(k),
+      `unit at stackIdx ${k} must be eaten-stamped at slump-avalanche start`);
   }
 });
 

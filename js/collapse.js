@@ -137,63 +137,80 @@ export function initiateCollapse(sw, world, hole, base) {
     units.get(k).detachAt = detachT;
   }
 
-  // Deterministic final targets. Natural mound extent scales with tower
-  // size (unit-radius times height), clamped to the cap times mound-spread.
-  // A short-pile slump uses a much tighter radius so units mostly hop IN
-  // PLACE (the tower crumbles into the hole one unit at a time and rim
-  // physics eats them normally, feeding the combo chain).
-  const naturalMax = 2 * base.r * (maxIdx + 1);
-  const targetRadius = isTall
-    ? Math.min(cap * CONFIG.STACK_AVAL_MOUND_SPREAD, naturalMax)
-    : Math.min(cap * CONFIG.STACK_AVAL_MOUND_SPREAD * 0.35,
-               naturalMax * CONFIG.STACK_AVAL_SLUMP_RADIUS_MULT);
+  // Deterministic settle targets: a SUNFLOWER-SPIRAL heap around the base.
+  //
+  // Why not random-in-cone: any two settled targets that end up closer than
+  // one unit diameter fuse into a caterpillar row on screen under the ISO_Y
+  // squash — the y-sorted overlap of identical sprites merges them into a
+  // horizontal strip no matter how random the raw angles were. Owner
+  // playtest confirmed rows kept surfacing three times in a 48s run.
+  //
+  // Golden-angle sunflower placement enforces the minimum separation for
+  // free: r_j = spacing * sqrt(j), angle_j = j * 137.5°. Adjacent points
+  // sit ~spacing apart no matter which j indices you pick, dense at the
+  // center thinning outward — exactly the pyramid-collapse pile shape.
+  // Small hashed jitter breaks visual regularity without breaking the
+  // spacing guarantee. Forward-shift (along the away-from-hole direction)
+  // gives the owner's 60/40 forward bias organically.
+  //
+  // Slump path: same spiral with tight spacing so units mostly hop into
+  // the hole (feeding the combo chain), and any leftover still gets the
+  // no-row spacing.
+  //
+  // Cap awareness: if the natural spiral would exceed 2×chunkSize
+  // (S1 invariant), compress spacing so the farthest target sits at
+  // 0.9 × cap. The min-separation weakens for beacon-scale towers but
+  // that's the tradeoff — the cap must hold or spatial queries lose
+  // landed units.
+  const GOLDEN_ANGLE_RAD = Math.PI * (3 - Math.sqrt(5));
+  const N = maxIdx; // spiral indices 0..N-1 for unit stackIdxs 1..N
+  const naturalSpacing = isTall
+    ? 2 * base.r * CONFIG.STACK_AVAL_SPIRAL_SPACING_TALL
+    : 2 * base.r * CONFIG.STACK_AVAL_SPIRAL_SPACING_SLUMP;
+  const naturalMaxRadius = naturalSpacing * Math.sqrt(Math.max(1, N));
+  const capBudget = cap * 0.9;
+  const spacing = naturalMaxRadius > capBudget
+    ? capBudget / Math.sqrt(Math.max(1, N))
+    : naturalSpacing;
+  const forwardShift = isTall
+    ? spacing * CONFIG.STACK_AVAL_FORWARD_SHIFT
+    : 0;
+  const targetRadius = cap; // used only as the safety clamp
 
-  // Target distribution: a HAPHAZARD RADIAL HEAP around the base, like a
-  // real toppled pyramid. Not a fan.
-  //   Angle: ~60% of units land in the "forward" half (±90° from dir),
-  //     the remaining ~40% can spill anywhere including sideways or a
-  //     little behind. Owner asked for radial-with-bias, not a cone.
-  //   Distance: density is HIGH near the base, thinning outward. Low
-  //     stackIdx units barely move; high stackIdx (top of column) units
-  //     fling far. Distances are stackFrac-weighted with a power-skewed
-  //     tail so a few units land near the cap and the rest cluster in.
-  //   Rotation: full-circle random per unit (hashed), applied on settle
-  //     so lying-down sprites face every angle (croissants sprawled).
-  // Every target stays within targetRadius (S1 cap invariant).
-  const FORWARD_HALF = Math.PI / 2;      // ±90° from dir
-  const WIDE_HALF = Math.PI;             // ±180° (anywhere)
-  const FORWARD_BIAS_FRAC = 0.60;        // 60% forward, 40% radial
   for (const u of units.values()) {
-    const stackFrac = (u.stackIdx + 0.5) / (maxIdx + 1);
+    const j = u.stackIdx - 1; // 0-indexed spiral position, bottom unit first
+    // Small deterministic jitter — angular ±10% of a golden step, radial
+    // ±15% of spacing. Small enough to preserve the min-separation
+    // guarantee, large enough to break perfect-spiral regularity.
+    const angleJitter = 0.1 * hash01(base.stackId, u.stackIdx, 0xa1) * GOLDEN_ANGLE_RAD;
+    const radiusJitter = 0.15 * hash01(base.stackId, u.stackIdx, 0xa2);
+    const localAngle = j * GOLDEN_ANGLE_RAD + angleJitter;
+    const localRadius = spacing * Math.sqrt(j + 0.4) * (1 + radiusJitter);
 
-    // Angle: pick forward-biased vs. wide-radial per unit.
-    const biasRoll = (hash01(base.stackId, u.stackIdx, 0xb2b2) + 1) / 2; // [0,1]
-    const angleFrac = hash01(base.stackId, u.stackIdx, 0xd0d0);        // [-1,1]
-    const forward = biasRoll < FORWARD_BIAS_FRAC;
-    const halfSpan = forward ? FORWARD_HALF : WIDE_HALF;
-    const angle = angleFrac * halfSpan;
+    // Local frame: +x = away-from-hole direction. Apply forward shift
+    // AFTER the spiral so the natural spiral's spacing is preserved.
+    let lx = Math.cos(localAngle) * localRadius + forwardShift;
+    const ly = Math.sin(localAngle) * localRadius;
+    // Slight squash of the "behind" half so late spiral points that land
+    // past the pivot still lean toward the hole-opposite side (a few
+    // fully-behind units are fine — they're the "spilled sideways" case
+    // the owner asked for).
+    if (lx < 0) lx *= CONFIG.STACK_AVAL_BEHIND_SQUASH;
 
-    // Distance: center rises with stackFrac (power 0.7 so it climbs
-    // fast for low idxs then plateaus), scatter grows with sqrt(stackFrac)
-    // so higher units have a heavier tail. Cubic skew concentrates most
-    // jitter samples near zero with rare far-flingers.
-    const centerFrac = 0.08 + 0.55 * Math.pow(stackFrac, 0.7);
-    const skewH = hash01(base.stackId, u.stackIdx, 0xa5a5);
-    const skew = Math.sign(skewH) * Math.pow(Math.abs(skewH), 2.4);
-    const jitterFrac = 0.45 * Math.sqrt(stackFrac) * skew;
-    const distFrac = Math.max(0, centerFrac + jitterFrac);
-    const dist = Math.min(targetRadius, distFrac * targetRadius);
+    // Safety clamp to the S1 cap (should rarely fire thanks to the
+    // spacing compression above).
+    const localDist = Math.hypot(lx, ly);
+    const scale = localDist > targetRadius ? targetRadius / localDist : 1;
+    const lxC = lx * scale;
+    const lyC = ly * scale;
 
-    // Compose direction (base dir rotated by angle).
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const rx = dirX * cos - dirY * sin;
-    const ry = dirX * sin + dirY * cos;
-    u.tx = base.x + rx * dist;
-    u.ty = base.y + ry * dist;
+    // Rotate to world frame: (dirX, dirY) is the +x-local basis vector,
+    // (-dirY, dirX) is the +y-local basis vector.
+    u.tx = base.x + dirX * lxC + (-dirY) * lyC;
+    u.ty = base.y + dirY * lxC + dirX * lyC;
 
     // Final resting rotation: random full-circle. Applied at settle so a
-    // lying croissant/emoji faces any angle, not the one accumulated by
+    // lying croissant/pretzel faces any angle, not the one accumulated by
     // physics spin (which correlates with flight time).
     u.finalRot = hash01(base.stackId, u.stackIdx, 0xe5e5) * Math.PI * 2;
   }
