@@ -44,19 +44,29 @@ let lastReport = -REPORT_EVERY;
 let lastHistoryT = -Infinity;
 let lastKnownLevel = 1;
 
+// Greedy target selection. forEachObjectNear only yields state='idle'
+// objects, and only the base of a tower is idle — stacked units above sit
+// in state='stacked' until the slump promotes them. So the bot is already
+// stack-aware: it targets tower bases, and slump chaining continues at the
+// same position for free. A modest bonus makes the bot prefer tower bases
+// slightly over lone singles at similar distance (mirroring a player being
+// visually drawn to a tower silhouette).
+const STACK_ATTRACTION = 0.75; // distance multiplier for tower bases
 function pickTarget() {
   const fitLimit = hole.r * CONFIG.FIT_FACTOR;
   for (const mult of SEARCH_MULTS) {
     const R = Math.max(hole.r * mult, 240);
     let best = null;
-    let bestD2 = Infinity;
+    let bestScore = Infinity;
     forEachObjectNear(world, hole.x, hole.y, R, (o) => {
       if (o.r > fitLimit) return;
       const dx = o.x - hole.x;
       const dy = o.y - hole.y;
       const d2 = dx * dx + dy * dy;
-      if (d2 < bestD2) {
-        bestD2 = d2;
+      const attract = o.stackId ? STACK_ATTRACTION : 1;
+      const score = d2 * attract * attract;
+      if (score < bestScore) {
+        bestScore = score;
         best = o;
       }
     });
