@@ -51,10 +51,13 @@ export const CONFIG = {
   CYCLE_SIZE_MULT: 6,     // object size multiplier per full biome cycle
 
   // Vertical stacks ("towers"). A stackable item may spawn as N identical
-  // units at one ground position — only the base is interactive; the units
-  // above draw as a vertical strip. Eating the base slumps the tower down
-  // one unit; a tall enough tower (alive >= TOPPLE_MIN) topples over
-  // instead and its units land as ordinary ground items in a line.
+  // units at one ground position; only the base is interactive, the units
+  // above draw as a vertical strip. Eating the base kicks off a per-unit
+  // AVALANCHE (see js/collapse.js): units detach bottom-up, tumble
+  // ballistically, and settle as an ordinary-idle radial heap around the
+  // base. Short piles (alive < TOPPLE_MIN) use the same system with a
+  // tight target radius so units mostly hop into the hole, feeding the
+  // combo chain.
   STACK_OASIS_CHANCE: 0.5,      // per oasis chunk: probability at least one tower spawns
   STACK_OASIS_MAX: 2,           // at most this many towers per oasis chunk
   STACK_DESERT_BEACON_PROB: 0.02, // per desert chunk: probability of a lone beacon tower

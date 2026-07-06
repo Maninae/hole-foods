@@ -150,8 +150,11 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   if (av && av.preLeanUntil > 0) {
     const k = Math.min(1, av.t / av.preLeanUntil);
     preLeanAngle = CONFIG.STACK_AVAL_PRELEAN_DEG * DEG * k;
-    // Sign follows av.dirX: positive dirX → column leans to the right.
-    preLeanSign = av.dirX >= 0 ? 1 : -1;
+    // Sign follows the ON-SCREEN x-projection of the fall direction: an
+    // east-west tip leans full, a pure north/south tip does not lean on
+    // the screen-horizontal axis (its projection is nearly zero). Using
+    // just sign(dirX) would make a pure-north tip lean right by mistake.
+    preLeanSign = av.dirX;
   }
 
   // Idle sway: the column pivots as one body around its base. Amplitude
@@ -200,6 +203,12 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
     ctx.restore();
   }
 
+  // columnAngle is loop-invariant; hoist its sin/cos out of the per-unit
+  // draw so a 20-tower scene doesn't spend thousands of trig calls per
+  // frame in the hot path.
+  const cosCol = Math.cos(columnAngle);
+  const sinCol = Math.sin(columnAngle);
+
   // Draw bottom-up so later (upper) sprites overlap earlier ones.
   const sorted = [...tw.members].sort((a, b) => a.stackIdx - b.stackIdx);
   for (const o of sorted) {
@@ -222,13 +231,11 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
     const rDraw = rScreen * (1 + persp);
 
     // Position: local (jx, -lift) around the base, rotated by column angle
-    // (sway + pre-lean).
-    const cosS = Math.cos(columnAngle);
-    const sinS = Math.sin(columnAngle);
+    // (sway + pre-lean, hoisted above).
     const lx = jx;
     const ly = -lift - rScreen * 0.22;
-    const sx = baseScreenX + lx * cosS - ly * sinS;
-    const sy = baseScreenY + lx * sinS + ly * cosS;
+    const sx = baseScreenX + lx * cosCol - ly * sinCol;
+    const sy = baseScreenY + lx * sinCol + ly * cosCol;
 
     const unitTilt = unitLean(baseTilt, rowFromBase);
     const leanRot = unitTilt * leanSign;

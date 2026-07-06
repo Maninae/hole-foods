@@ -173,8 +173,9 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   in a cone away from the hole, gravity + 1–2 damped bounces, and spin
   — then it settles as an ordinary 'idle' ground object at a
   **deterministic target** (hashed by stackId + stackIdx). The flight is
-  randomized (Math.random-flavored fx), only the resting spot is fixed;
-  that determinism keeps the S1 cap invariant testable. Airborne units
+  chaotic (initial impulses + spin hashed per unit, no Math.random in the
+  path), only the resting spot is fixed; that determinism keeps the S1 cap
+  invariant testable. Airborne units
   live in a new `'tumbling'` state that rim physics ignores, and the
   renderer draws them via `drawTumbling` with a smaller ground shadow
   offset from the sprite (the shadow-vs-sprite separation is the height

@@ -73,33 +73,6 @@ export function unitLean(baseTilt, stackIdx) {
   return baseTilt * (1 + CONFIG.STACK_LEAN_ACCUM * stackIdx);
 }
 
-// Landed position of a toppled unit at rotation `angle` (0 = upright,
-// PI/2 = fully fallen). Returned in world offsets from the base pivot,
-// plus a billboard-Y screen height factor (0..1 of the unit's diameter).
-export function toppleUnitTransform(stackIdx, unitDiameter, angle, dirX, dirY) {
-  // Center height above base at rest: (stackIdx + 0.5) * unitDiameter.
-  // Rotate around pivot at (0, 0, 0) about the horizontal axis perpendicular
-  // to (dirX, dirY): height compresses by cos, horizontal offset grows by sin.
-  const h = (stackIdx + 0.5) * unitDiameter;
-  const s = Math.sin(angle);
-  const c = Math.cos(angle);
-  const horiz = h * s;
-  const vertScreenFactor = c; // multiplied by unit diameter → billboard lift in world-height units
-  return {
-    dx: dirX * horiz,
-    dy: dirY * horiz,
-    heightFactor: vertScreenFactor,
-  };
-}
-
-// Final landed ground position for a unit at stackIdx k, given the base
-// pivot and the fall direction. The base itself was at (baseX, baseY);
-// unit k lands one diameter further along the fall direction per idx step.
-export function landedPosition(baseX, baseY, stackIdx, unitR, dirX, dirY) {
-  const dist = (stackIdx + 0.5) * 2 * unitR;
-  return { x: baseX + dirX * dist, y: baseY + dirY * dist };
-}
-
 // Turn a successfully-placed base into a full tower: mint N-1 sibling
 // units at the base's (x, y, r), all state='stacked' with contiguous
 // stackIdx. Returns the next free idx after consuming H-1 more (base's
