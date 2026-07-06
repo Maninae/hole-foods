@@ -97,26 +97,19 @@ export const CONFIG = {
   STACK_AVAL_PRELEAN_DEG: 10,      // pre-lean angle (degrees) — enough to read, not enough to launch
   STACK_AVAL_GRAVITY: 2400,        // z-gravity in world-units / s². Lower than earth-ish so
                                    // the airborne phase reads (bounces last long enough to see).
-  STACK_AVAL_LAUNCH_VZ: 240,       // initial upward velocity of a detaching unit (world-units / s)
-  STACK_AVAL_LAUNCH_VZ_PER_IDX: 60, // extra initial vz per idx up the column (top launches farther)
-  STACK_AVAL_CONE_DEG: 35,         // half-angle of the horizontal spread cone away from the hole
-  STACK_AVAL_HSPEED_BASE: 90,      // base horizontal speed on detach
-  STACK_AVAL_HSPEED_PER_IDX: 55,   // extra horizontal speed per idx (higher units fling farther)
-  STACK_AVAL_SLUMP_HSPEED: 30,     // horizontal magnitude in a short-pile slump (units mostly hop down)
-  STACK_AVAL_SPIN_RATE_DEG: 540,   // max spin rate (deg/s) — signed random per unit
+  STACK_AVAL_LAUNCH_VZ: 240,       // initial upward velocity of a detaching unit (world-units / s).
+                                   // Sets the flight time via the ballistic z-arc; vx/vy are then
+                                   // derived so the hop ARRIVES at the spiral target.
+  STACK_AVAL_LAUNCH_VZ_PER_IDX: 60, // extra initial vz per idx up the column (top-of-column units
+                                    // arc higher, so their peak is more visible mid-air).
+  STACK_AVAL_SPIN_RATE_DEG: 540,   // max spin rate (deg/s), signed random per unit
   STACK_AVAL_BOUNCE_VZ: -0.4,      // vz multiplier on landing (elastic-ish)
-  STACK_AVAL_BOUNCE_HORIZ: 0.55,   // horizontal-velocity multiplier on bounce (friction)
   STACK_AVAL_BOUNCE_SPIN: 0.7,     // spin multiplier on bounce
   STACK_AVAL_MIN_VZ_SETTLE: 25,    // once |vz| drops below this on landing, unit is settled
   STACK_AVAL_MAX_BOUNCES: 2,       // fallback cap on bounces (in case damping picks a slow decay)
-  STACK_AVAL_MAX_FLIGHT: 3.5,      // seconds — hard cap on airborne time so a stuck unit can't lock
+  STACK_AVAL_MAX_FLIGHT: 3.5,      // seconds, hard cap on airborne time so a stuck unit can't lock
   STACK_AVAL_DUST_INTERVAL: 0.06,  // min seconds between dust puffs during an avalanche (throttle)
   STACK_AVAL_THUMP_INTERVAL: 0.11, // min seconds between thump sfx during an avalanche (throttle)
-  STACK_AVAL_MOUND_SPREAD: 0.45,   // (legacy — the sunflower spiral now owns mound extent via
-                                   // spacing * sqrt(H); this remains only as the tall-tower fraction
-                                   // of the S1 cap the spiral gets compressed into when it would
-                                   // exceed 2 x chunkSize.)
-  STACK_AVAL_SLUMP_RADIUS_MULT: 0.15, // (legacy — same reasoning as above; not read by the spiral)
   STACK_AVAL_SPIRAL_SPACING_TALL: 1.15, // sunflower spacing as fraction of unit DIAMETER (tall).
                                         // 1.15 places adjacent settle targets ~1.15 diameters apart,
                                         // above the min-separation threshold that keeps identical

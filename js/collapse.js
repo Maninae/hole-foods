@@ -232,9 +232,11 @@ export function initiateCollapse(sw, world, hole, base) {
   });
 }
 
-// Airborne physics for one unit: gravity, ground contact, damped bounces,
-// spin, snap-to-target on settle. Returns true if the unit newly settled
-// this tick (for dust/thump event throttling).
+// Airborne physics: gravity + integration. On first touchdown the unit is
+// at (tx, ty, 0) by construction (vx/vy were chosen to arrive there), so a
+// bounce is a purely vertical hop with zeroed horizontal velocity. That's
+// how "1-2 small hops" stays local and never re-flings the sprite.
+// Returns true iff the unit bounced this tick (for dust/thump throttling).
 function stepUnit(av, u, dt) {
   u.flightT += dt;
   u.vz -= CONFIG.STACK_AVAL_GRAVITY * dt;
@@ -244,46 +246,63 @@ function stepUnit(av, u, dt) {
   u.rot += u.spin * dt;
   let newlyLanded = false;
   if (u.z <= 0 && u.vz < 0) {
-    // Ground contact — bounce or settle.
     if (u.bounces < CONFIG.STACK_AVAL_MAX_BOUNCES
         && Math.abs(u.vz) > CONFIG.STACK_AVAL_MIN_VZ_SETTLE
         && u.flightT < CONFIG.STACK_AVAL_MAX_FLIGHT) {
       u.bounces++;
       u.z = 0;
       u.vz *= CONFIG.STACK_AVAL_BOUNCE_VZ;
-      u.vx *= CONFIG.STACK_AVAL_BOUNCE_HORIZ;
-      u.vy *= CONFIG.STACK_AVAL_BOUNCE_HORIZ;
+      // Zero horizontal on bounce so the unit hops IN PLACE at its target.
+      // (The pre-bounce vx/vy already delivered it there.) This is the
+      // "local decaying hop" the owner asked for.
+      u.vx = 0; u.vy = 0;
       u.spin *= CONFIG.STACK_AVAL_BOUNCE_SPIN;
-      newlyLanded = true; // dust puff on bounce
+      newlyLanded = true;
     } else {
       settleUnit(av, u);
     }
   } else if (u.flightT >= CONFIG.STACK_AVAL_MAX_FLIGHT) {
-    // Hard cap — settle regardless. Prevents a stuck unit from locking the
-    // avalanche (test: 'avalanche: settles within a bounded sim time').
     settleUnit(av, u);
   }
   return newlyLanded;
 }
 
+// Settle: hand the chunk object back to the idle pool at its current x/y.
+// Because the flight was aimed to arrive at (tx, ty), the current x/y is
+// (tx, ty) modulo float and bounce settling; no visible teleport. As a
+// safety belt (dt-slop, integrator error) we correct positions that
+// drifted further than EPSILON_R from the target — but the correction is
+// always < 0.5 unit radius by construction, so it can't teleport.
 function settleUnit(av, u) {
-  // Snap the chunk object to the deterministic target and hand it back to
-  // the ordinary idle pool (rim physics eats it normally from here).
-  // Snap rot to the deterministic finalRot so lying-down sprites face
-  // every angle instead of the physics-correlated spin.
   u.phase = 'settled';
   u.z = 0;
-  u.x = u.tx;
-  u.y = u.ty;
+  const eps = av.unitR * 0.5;
+  const dxT = u.tx - u.x;
+  const dyT = u.ty - u.y;
+  if (Math.hypot(dxT, dyT) > eps) {
+    // Ballistic drifted (usually from the max-flight hard cap firing
+    // early). Slide the last bit rather than teleport.
+    u.x = u.tx;
+    u.y = u.ty;
+  }
   u.vx = 0; u.vy = 0; u.vz = 0;
   const o = u.obj;
-  o.x = u.tx;
-  o.y = u.ty;
+  o.x = u.x;
+  o.y = u.y;
   o.state = 'idle';
   o.landed = true;
   o.tilt = 0;
   o.rot = u.finalRot ?? o.rot;
   o.vx = 0; o.vy = 0;
+}
+
+// Compute the ballistic flight time from (x0, y0, z0) to (tx, ty, 0) under
+// gravity, given an initial vz. Solves 0 = z0 + vz*T - 0.5*g*T^2 for T > 0.
+function flightTime(z0, vz, gravity) {
+  // Positive root of the quadratic. Guard against tiny negatives in the
+  // discriminant from float rounding.
+  const disc = Math.max(0, vz * vz + 2 * gravity * z0);
+  return (vz + Math.sqrt(disc)) / gravity;
 }
 
 function detachUnit(av, u) {
@@ -294,38 +313,26 @@ function detachUnit(av, u) {
   u.y = av.baseY;
   u.z = s * 2 * av.unitR;
 
-  // Horizontal impulse: cone around the spread direction, magnitude scales
-  // with stackIdx (higher units fling farther). Short-pile slumps use
-  // reduced base speed so units "hop down" more than fling out.
-  const spreadCone = CONFIG.STACK_AVAL_CONE_DEG * DEG;
-  const angleJitter = spreadCone * hash01(stackId, s, 0xbeef);
-  const cos = Math.cos(angleJitter);
-  const sin = Math.sin(angleJitter);
-  const dirX = av.dirX * cos - av.dirY * sin;
-  const dirY = av.dirX * sin + av.dirY * cos;
-
-  const baseSpeed = av.isTall
-    ? CONFIG.STACK_AVAL_HSPEED_BASE + s * CONFIG.STACK_AVAL_HSPEED_PER_IDX
-    : CONFIG.STACK_AVAL_SLUMP_HSPEED + s * CONFIG.STACK_AVAL_HSPEED_PER_IDX * 0.35;
-  // Small ±25% speed jitter, deterministic.
-  const speedJit = 1 + 0.25 * hash01(stackId, s, 0xcafe);
-  const speed = baseSpeed * speedJit;
-  u.vx = dirX * speed;
-  u.vy = dirY * speed;
-
-  // Vertical impulse: small upward toss, scaled with stackIdx so tall units
-  // arc higher (matches the reference frame — tops of the column fly up).
+  // Vertical impulse: hashed per-unit boost so top-of-column units arc
+  // higher (their z0 is already tall; extra vz makes them peak higher).
+  // vz drives the flight-time equation, which drives vx/vy below.
   const vzBoost = 1 + 0.3 * hash01(stackId, s, 0xf00d);
   u.vz = (CONFIG.STACK_AVAL_LAUNCH_VZ + s * CONFIG.STACK_AVAL_LAUNCH_VZ_PER_IDX) * vzBoost;
+
+  // Horizontal velocity is now DERIVED, not sampled. Aim the parabolic
+  // hop AT the deterministic spiral target so the unit lands where it is
+  // supposed to settle. This is the fix for the owner's two symptoms:
+  // no more "flings super far" (vx is bounded by targetDist / T) and no
+  // more "teleports back" (there's nothing to snap to).
+  const T = flightTime(u.z, u.vz, CONFIG.STACK_AVAL_GRAVITY);
+  u.vx = (u.tx - u.x) / T;
+  u.vy = (u.ty - u.y) / T;
 
   // Spin: signed random, deterministic per unit.
   u.spin = hash01(stackId, s, 0xace0) * CONFIG.STACK_AVAL_SPIN_RATE_DEG * DEG;
 
   u.phase = 'tumbling';
   u.obj.state = 'tumbling';
-  // Renderer needs the airborne (x, y, z) — mirror onto the object so a
-  // single query path (chunk.objects) is enough. Real position is authoritative
-  // on `u`; we won't move it via chunk.objects while airborne.
 }
 
 // Drive one avalanche forward by dt. Returns event descriptors to bubble
