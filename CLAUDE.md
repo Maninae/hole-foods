@@ -28,9 +28,11 @@ js/swallow.js        vacuum pull, tip-in fall state machine, combo + scoring;
                      tower slump + topple animations; emits events (pure —
                      presentation reacts to events)
 js/stacks.js         pure helpers for vertical stacks ("towers"): grouping
-                     by stackId, current-base promotion, topple geometry.
-                     Only the lowest alive unit of a tower is interactive;
-                     the rest sit in state='stacked' until slumped up.
+                     by stackId, current-base promotion, sibling minting
+                     (spawnStackFromBase — called from world.js chunk
+                     generation), topple geometry. Only the lowest alive
+                     unit of a tower is interactive; the rest sit in
+                     state='stacked' until slumped up.
 js/camera.js         eased follow + lookahead, size-driven zoom, shake (pure)
 js/input.js          keyboard steer (WASD/arrows) + touch drag → {x,y,mag}
 js/audio.js          WebAudio synth: pop/gulp/combo/levelup/ambient; mute persists
@@ -71,6 +73,10 @@ js/render.js         two passes for the pseudo-3D view:
                      (pit→falling(clipped)→rim) → tease rings → fxWorld.
                      BILLBOARD (upright): shadows → sprites y-sorted (lifted,
                      tilt-lean toward hole) → score floaters
+js/render-sprites.js drawSingle + drawTower — pure per-item billboard
+                     draw code (world→screen mapping, lean, slump/topple
+                     animation branches). Called from render.js's
+                     billboard pass.
 js/hud.js            DOM HUD + overlays + best-run localStorage
 js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ```
@@ -142,16 +148,26 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   animation. Topple (alive ≥ STACK_TOPPLE_MIN = 8) rotates the strip 90°
   about the base pivot over 0.5 s (matches FALL_TIME); each unit lands as
   an ordinary 'idle' ground object with `landed:true`, spaced one
-  diameter apart along the fall line (away from the hole), and its idx
-  is stamped into world.eaten so a chunk unload/reload can't respawn it.
+  diameter apart along the fall line (away from the hole). **Non-base
+  member idxs are stamped into world.eaten at topple START**, not at
+  landing — the 0.5 s animation is a window where an unlucky unload+reload
+  would otherwise resurrect the tower. markEaten is idempotent, and no
+  live query path filters by world.eaten, so landed units stay eatable
+  by rim physics while their chunk is loaded. **Landing-line length is
+  capped at 2 × chunkSizeAt(level) of the base's chunk** — a deep-cycle
+  beacon (24 units × unitR≈200 = 9400 world units uncompressed) would
+  otherwise land outside PAD=3 and be invisible to every spatial query;
+  the fix compresses per-unit spacing (scale stored on the topple record)
+  so units land as dense fallen dominoes but emoji sizes are untouched.
+  The same scale is applied in the mid-topple render path.
   Partially-eaten towers survive unload via world.eaten alone —
   `normalizeBases` (in stacks.js, called after the eaten-filter) promotes
   the lowest surviving 'stacked' unit to 'idle' on regen. Stack units'
   idxs consume the chunk RNG deterministically: base attempt takes 1 idx
   whether accepted or rejected; a successful base then consumes H−1 more
-  for its siblings. Skipping 'falling'/'toppling' in `normalizeBases` is
-  load-bearing — otherwise the falling base would get re-marked 'idle'
-  mid-fall and re-tip.
+  for its siblings via `spawnStackFromBase`. Skipping 'falling'/'toppling'
+  in `normalizeBases` is load-bearing — otherwise the falling base would
+  get re-marked 'idle' mid-fall and re-tip.
 - **Balance is sim-tuned:** HOLE_R0 (26.4), GROWTH_K (0.0288), and the oasis
   density constants were set by greedy-bot simulation
   (`npm run sim -- 12 <seed>`; L3 reached in 20–45 s greedy, cycle 1
