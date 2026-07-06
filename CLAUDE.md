@@ -169,13 +169,16 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   hole, its stacked units detach BOTTOM-UP with a small stagger. Tall
   towers (alive ≥ `STACK_TOPPLE_MIN` = 8) also get a Jenga "losing-balance"
   pre-lean beat (~0.15 s, ~10°) before the first detach. Each detached
-  unit becomes a ballistic body with fake `z` height, horizontal velocity
-  in a cone away from the hole, gravity + 1–2 damped bounces, and spin
-  — then it settles as an ordinary 'idle' ground object at a
-  **deterministic target** (hashed by stackId + stackIdx). The flight is
-  chaotic (initial impulses + spin hashed per unit, no Math.random in the
-  path), only the resting spot is fixed; that determinism keeps the S1 cap
-  invariant testable. Airborne units
+  unit becomes a ballistic body with fake `z` height, spin, and 1–2 damped
+  LOCAL bounces (zeroed horizontal on bounce), then settles as an ordinary
+  'idle' ground object at a **deterministic target** on a sunflower spiral
+  (angle_j = j × 137.5° with hashed jitter, r_j = spacing × √j; hashed by
+  stackId + stackIdx). Horizontal velocity is DERIVED from the target: at
+  detach we solve the ballistic z-arc for flight time T, then set
+  `vx = (tx − x) / T`, `vy = (ty − y) / T`, so the hop LANDS on the
+  target. Settle is a no-op on x/y (the unit is already there), which is
+  what makes the collapse read as a real crumble instead of a fling
+  followed by a snap. Airborne units
   live in a new `'tumbling'` state that rim physics ignores, and the
   renderer draws them via `drawTumbling` with a smaller ground shadow
   offset from the sprite (the shadow-vs-sprite separation is the height

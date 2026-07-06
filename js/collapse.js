@@ -1,12 +1,14 @@
-// Tower collapse: per-unit avalanche. When a tower base tips into the hole,
-// its stacked units detach BOTTOM-UP with a small stagger (Jenga-losing-
-// balance beat first, on tall columns). Each detached unit becomes a
-// ballistic body with a fake `z` height above the ground, horizontal
-// velocity spread into a cone away from the hole, gravity + 1-2 damped
-// bounces, and a spin — then it settles at a DETERMINISTIC target position
-// (seeded per unit) as an ordinary 'idle' ground object. That determinism
-// is what lets the S1 landing-cap invariant stay testable — the flight
-// itself is randomized, only the resting spot is fixed.
+// Tower collapse: per-unit avalanche. When a tower base tips into the
+// hole, its stacked units detach BOTTOM-UP with a small stagger (Jenga
+// losing-balance beat first, on tall columns). Each detached unit
+// becomes a ballistic body with a fake `z` height above the ground, a
+// spin, and 1-2 damped local bounces. Its horizontal velocity is DERIVED
+// so the parabolic hop lands ON the deterministic sunflower-spiral
+// target: vx = (tx - x0) / T, vy = (ty - y0) / T where T is the flight
+// time computed from z0, vz, gravity. Settle is then a no-op on x/y
+// (unit is already at the target), which fixed the owner-reported
+// "fling far, then teleport back" bug: nothing to snap because the
+// flight aimed at the target from the first frame.
 //
 // Data model:
 //   sw.avalanches = [{
