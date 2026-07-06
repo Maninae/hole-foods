@@ -31,12 +31,12 @@ async function stageAndShoot(page, prefix) {
     const objects = [];
     const H = 14;
     const unitR = 30;
-    const emoji = '🍩';
+    const emoji = '🥐'; // non-round: rotation snap on settle is actually visible
     for (let k = 0; k < H; k++) {
       objects.push({
         id: `0:0,0:t${k}`, idx: k, ck: '0:0,0',
         x: 0, y: 0, r: unitR,
-        e: emoji, hue: 34, up: false, rot: 0,
+        e: emoji, hue: 40, up: false, rot: 0,
         points: 1n,
         state: k === 0 ? 'idle' : 'stacked',
         vx: 0, vy: 0, tilt: 0,

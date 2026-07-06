@@ -36,7 +36,7 @@ try {
       objects.push({
         id: `0:0,0:t${k}`, idx: k, ck: '0:0,0',
         x: 0, y: 0, r: unitR,
-        e: '🍩', hue: 34, up: false, rot: 0,
+        e: '🥐', hue: 40, up: false, rot: 0, // non-round emoji so rotation is visible
         points: 1n,
         state: k === 0 ? 'idle' : 'stacked',
         vx: 0, vy: 0, tilt: 0,
