@@ -443,12 +443,17 @@ test('avalanche: no snap even at large-unit towers (physics scales with unitR)',
   const world = createWorld('stack-scale-test');
   world.chunks.set('0:0,0', { level: 0, cx: 0, cy: 0, band: 0, objects });
   const hole = createHole();
-  hole.r = 400; hole.potential = 400; hole.level = 20;
-  hole.x = -10; hole.y = 0;
+  // Big enough to actually swallow an R=3000 base under FIT_FACTOR.
+  hole.r = R * 1.5; hole.potential = hole.r; hole.level = 30;
+  hole.x = -R * 0.6; hole.y = 0; // rim overlaps the base to trigger tip-in
   const sw = createSwallow();
-  swallowUpdate(sw, 1 / 60, 0, world, hole);
-  hole.x = 1e7; hole.y = 1e7; // move hole away so rim doesn't re-eat units
+  // Drive rim physics until the base tips and the avalanche spawns.
+  for (let ti = 0; ti < 60 && !sw.avalanches?.length; ti++) {
+    swallowUpdate(sw, 1 / 60, ti / 60, world, hole);
+  }
+  hole.x = 1e9; hole.y = 1e9; // move hole far away so rim doesn't re-eat units
   const av = sw.avalanches[0];
+  assert.ok(av, 'avalanche should have been triggered by the base tipping');
   const unitDiameter = 2 * R;
   const teleThreshold = 0.5 * unitDiameter;
   const prev = new Map();

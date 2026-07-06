@@ -218,11 +218,20 @@ export function initiateCollapse(sw, world, hole, base) {
   }
 
   if (!sw.avalanches) sw.avalanches = [];
+  // Physics scale: linear multiplier on vz/gravity/settle-threshold so
+  // flight time stays constant regardless of unit radius. Without this
+  // scale, a cycle-2+ tower's flight time balloons past MAX_FLIGHT and
+  // the settle epsilon slide fires with a huge miss (visible teleport).
+  // Floor at 1: small towers (base.r < HOLE_R0) keep today's tuning so
+  // the slump combo chain doesn't slow down. Only scale UP for oversize.
+  const physicsScale = Math.max(1, base.r / CONFIG.HOLE_R0);
+
   sw.avalanches.push({
     stackId: base.stackId,
     ck: base.ck,
     baseX: base.x, baseY: base.y,
     unitR: base.r,
+    physicsScale,
     dirX, dirY,
     cap,
     isTall,
@@ -241,7 +250,7 @@ export function initiateCollapse(sw, world, hole, base) {
 // Returns true iff the unit bounced this tick (for dust/thump throttling).
 function stepUnit(av, u, dt) {
   u.flightT += dt;
-  u.vz -= CONFIG.STACK_AVAL_GRAVITY * dt;
+  u.vz -= CONFIG.STACK_AVAL_GRAVITY * av.physicsScale * dt;
   u.x += u.vx * dt;
   u.y += u.vy * dt;
   u.z += u.vz * dt;
@@ -249,7 +258,7 @@ function stepUnit(av, u, dt) {
   let newlyLanded = false;
   if (u.z <= 0 && u.vz < 0) {
     if (u.bounces < CONFIG.STACK_AVAL_MAX_BOUNCES
-        && Math.abs(u.vz) > CONFIG.STACK_AVAL_MIN_VZ_SETTLE
+        && Math.abs(u.vz) > CONFIG.STACK_AVAL_MIN_VZ_SETTLE * av.physicsScale
         && u.flightT < CONFIG.STACK_AVAL_MAX_FLIGHT) {
       u.bounces++;
       u.z = 0;
@@ -317,16 +326,21 @@ function detachUnit(av, u) {
 
   // Vertical impulse: hashed per-unit boost so top-of-column units arc
   // higher (their z0 is already tall; extra vz makes them peak higher).
-  // vz drives the flight-time equation, which drives vx/vy below.
+  // vz and gravity both scale linearly with av.physicsScale, which keeps
+  // the flight time invariant across cycles and slots (see initiateCollapse
+  // for the derivation). Without the scale, tall cycle-2+ towers would
+  // fly for >>MAX_FLIGHT and hit the settle epsilon slide as a visible
+  // teleport.
   const vzBoost = 1 + 0.3 * hash01(stackId, s, 0xf00d);
-  u.vz = (CONFIG.STACK_AVAL_LAUNCH_VZ + s * CONFIG.STACK_AVAL_LAUNCH_VZ_PER_IDX) * vzBoost;
+  u.vz = (CONFIG.STACK_AVAL_LAUNCH_VZ + s * CONFIG.STACK_AVAL_LAUNCH_VZ_PER_IDX)
+       * vzBoost * av.physicsScale;
 
   // Horizontal velocity is now DERIVED, not sampled. Aim the parabolic
   // hop AT the deterministic spiral target so the unit lands where it is
   // supposed to settle. This is the fix for the owner's two symptoms:
   // no more "flings super far" (vx is bounded by targetDist / T) and no
   // more "teleports back" (there's nothing to snap to).
-  const T = flightTime(u.z, u.vz, CONFIG.STACK_AVAL_GRAVITY);
+  const T = flightTime(u.z, u.vz, CONFIG.STACK_AVAL_GRAVITY * av.physicsScale);
   u.vx = (u.tx - u.x) / T;
   u.vy = (u.ty - u.y) / T;
 
