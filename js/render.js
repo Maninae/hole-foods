@@ -210,13 +210,15 @@ function drawTower(ctx, tw, hole, sw, t, dpr) {
       // Rotate the unit's up-vector by toppleAngle: horizontal displacement
       // along the fall direction (compressed by the landing-line cap so a
       // deep-cycle giant fits inside the base chunk's PAD window), vertical
-      // compression by cos.
+      // compression by cos. The column's rotation about the base pivot is
+      // the whole visual — no per-sprite lean here (a near-vertical fall
+      // where dirX≈0 would otherwise flip sign arbitrarily on the sprite).
       const worldHoriz = (stackIdx + 0.5) * 2 * tw.unitR * spacingScale * s;
       const worldX = tw.baseX + dirX * worldHoriz;
       const worldY = tw.baseY + dirY * worldHoriz;
       sx = worldX * t.scale + t.tx;
       sy = worldY * t.scaleY + t.ty - h * c;
-      leanRot = toppleAngle * (dirX >= 0 ? 1 : -1);
+      leanRot = 0;
     } else {
       // 'idle' or 'stacked' — upright at the pivot, lifted by column position.
       const p = stackIdx - effectiveBase;
