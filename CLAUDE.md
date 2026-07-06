@@ -25,7 +25,12 @@ js/hole.js           player state: easing movement, DISCRETE size ladder
                      (r snaps to radiusForLevel; potential accumulates
                      between rungs), holeProgress, sizeLabel
 js/swallow.js        vacuum pull, tip-in fall state machine, combo + scoring;
-                     emits events (pure — presentation reacts to events)
+                     tower slump + topple animations; emits events (pure —
+                     presentation reacts to events)
+js/stacks.js         pure helpers for vertical stacks ("towers"): grouping
+                     by stackId, current-base promotion, topple geometry.
+                     Only the lowest alive unit of a tower is interactive;
+                     the rest sit in state='stacked' until slumped up.
 js/camera.js         eased follow + lookahead, size-driven zoom, shake (pure)
 js/input.js          keyboard steer (WASD/arrows) + touch drag → {x,y,mag}
 js/audio.js          WebAudio synth: pop/gulp/combo/levelup/ambient; mute persists
@@ -127,6 +132,26 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   (radius=huge, combo=×5) cascades a whole chain in dependency order. Keep
   the ACHIEVEMENTS array in topological order — the table-integrity test
   enforces both acyclicity and forward-only requires references.
+- **Tower invariants** (tests/unit/stacks.test.js): a tower is N units of
+  ONE item at ONE ground position, each with `stackId` (unique per chunk)
+  and `stackIdx` (0 = base, increases upward). ONLY the lowest alive unit
+  is 'idle' — the rest sit in 'stacked' so spatial queries and rim
+  physics skip them; only the renderer walks stacked/toppling units, and
+  it draws them as a bottom-up vertical strip pinned to the base's (x, y).
+  Slump promotes the next surviving stack unit to 'idle' after a 0.12 s
+  animation. Topple (alive ≥ STACK_TOPPLE_MIN = 8) rotates the strip 90°
+  about the base pivot over 0.5 s (matches FALL_TIME); each unit lands as
+  an ordinary 'idle' ground object with `landed:true`, spaced one
+  diameter apart along the fall line (away from the hole), and its idx
+  is stamped into world.eaten so a chunk unload/reload can't respawn it.
+  Partially-eaten towers survive unload via world.eaten alone —
+  `normalizeBases` (in stacks.js, called after the eaten-filter) promotes
+  the lowest surviving 'stacked' unit to 'idle' on regen. Stack units'
+  idxs consume the chunk RNG deterministically: base attempt takes 1 idx
+  whether accepted or rejected; a successful base then consumes H−1 more
+  for its siblings. Skipping 'falling'/'toppling' in `normalizeBases` is
+  load-bearing — otherwise the falling base would get re-marked 'idle'
+  mid-fall and re-tip.
 - **Balance is sim-tuned:** HOLE_R0 (26.4), GROWTH_K (0.0288), and the oasis
   density constants were set by greedy-bot simulation
   (`npm run sim -- 12 <seed>`; L3 reached in 20–45 s greedy, cycle 1
@@ -143,7 +168,7 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ## Testing
 
 ```
-npm test           # 125 unit tests (node --test tests/unit/*.test.js)
+npm test           # 139 unit tests (node --test tests/unit/*.test.js)
 npm run test:e2e   # 9 Playwright tests: real steering → swallow → growth,
                    # pause/mute/best persistence, Cmd+Tab stuck-key,
                    # collection overlay (Escape + P capture), HUD map
