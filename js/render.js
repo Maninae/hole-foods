@@ -344,16 +344,27 @@ export function renderScene(R, state) {
 
   // Elliptical contact shadows first, so a later sprite covers a neighbor's
   // shadow instead of the reverse. Towers only get a single shadow at the
-  // base pivot — no shadow per stacked unit.
-  ctx.fillStyle = 'rgba(25, 20, 50, 0.18)';
+  // base pivot — no shadow per stacked unit. A toppling tower fades its
+  // shadow with topple progress: at t=0 the whole column still stands
+  // over the pivot, but by t=1 the base is gone and the strip has fallen
+  // sideways, so the stationary shadow at the pivot is a visual lie
+  // (also, it would pop out abruptly the frame the topple completes).
+  const baseShadowAlpha = 0.18;
   for (const item of visible) {
-    let cx; let cy; let cr;
+    let cx; let cy; let cr; let alpha = baseShadowAlpha;
     if (item.type === 'single') {
       const o = item.obj;
       cx = o.x; cy = o.y; cr = o.r;
     } else {
       cx = item.tower.baseX; cy = item.tower.baseY; cr = item.tower.unitR;
+      const tp = sw.topples.find((t2) => t2.stackId === item.tower.stackId);
+      if (tp) {
+        const k = Math.min(1, tp.t / tp.duration);
+        alpha = baseShadowAlpha * (1 - k);
+        if (alpha <= 0.001) continue; // fully faded — skip the ellipse entirely
+      }
     }
+    ctx.fillStyle = `rgba(25, 20, 50, ${alpha})`;
     const sx = cx * t.scale + t.tx;
     const sy = cy * t.scaleY + t.ty;
     const rx = cr * 0.8 * t.scale;
