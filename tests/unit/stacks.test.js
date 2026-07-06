@@ -175,37 +175,45 @@ test('slump: eating from the bottom feeds combos (chain of swallows)', () => {
     `expected a combo to be live, streak=${sw.streak} mult=${sw.mult}`);
 });
 
-// --- Topple ---------------------------------------------------------------
+// --- Avalanche collapse (Part B) -----------------------------------------
+// Tall towers no longer topple as a rigid line — they detach unit-by-unit
+// bottom-up, tumble ballistically, and land as a chaotic mound (still inside
+// the landing cap). Short piles slump the same way with smaller impulses.
 
-test('topple: tall stacks (≥ TOPPLE_MIN alive) fall over on base swallow, landing as ordinary idles', () => {
+// Upper bound on the time an avalanche can take to fully settle. Used by
+// tests to make sure they sim long enough for every unit to land.
+function avalanchePlayoutSeconds(H) {
+  return CONFIG.STACK_AVAL_PRELEAN_TIME
+    + CONFIG.STACK_AVAL_STAGGER * H
+    + CONFIG.STACK_AVAL_MAX_FLIGHT
+    + 0.5;
+}
+
+test('avalanche: tall stacks (≥ TOPPLE_MIN alive) collapse into landed idles', () => {
   const H = Math.max(CONFIG.STACK_TOPPLE_MIN, 10);
   const { world, hole, sw } = makeStackFixture(H);
-  // Give the base a specific direction to fall away from.
-  hole.x = -10; hole.y = 0; // hole is to the left, so the tower topples to the right
-  const events = runSeconds(sw, world, hole, CONFIG.STACK_TOPPLE_TIME + 0.5);
-  // The base itself is consumed.
+  // Hole to the left — mound should form to the right.
+  hole.x = -10; hole.y = 0;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
   const eaten = world.eaten.get('0:0,0');
   assert.ok(eaten && eaten.has(0), 'base must be recorded as eaten');
-  // All non-base units are now idle (landed) and no longer share (x, y).
   const chunk = world.chunks.get('0:0,0');
   const survivors = chunk.objects.filter((o) => o.stackIdx > 0);
   assert.ok(survivors.length >= 1,
-    `expected some landed units after topple, got ${survivors.length}`);
+    `expected some landed units after collapse, got ${survivors.length}`);
   for (const o of survivors) {
     assert.equal(o.state, 'idle', 'landed unit should be idle');
-    assert.ok(!('stacked' === o.state), 'no unit should stay stacked after topple');
-    // They should have moved horizontally away from the pivot.
     assert.ok(Math.abs(o.x) > 1 || Math.abs(o.y) > 1,
       `landed unit didn't move: (${o.x}, ${o.y})`);
   }
 });
 
-test('topple: landed units fall away from the hole', () => {
+test('avalanche: landed units fall away from the hole (mound cone)', () => {
   const H = Math.max(CONFIG.STACK_TOPPLE_MIN, 10);
   const { world, hole, sw } = makeStackFixture(H);
-  // Hole is to the LEFT. Landed line should extend to the RIGHT (positive x).
+  // Hole to the LEFT. Mound extends to the RIGHT — every landed unit's x > 0.
   hole.x = -10; hole.y = 0;
-  runSeconds(sw, world, hole, CONFIG.STACK_TOPPLE_TIME + 0.5);
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
   const chunk = world.chunks.get('0:0,0');
   const landed = chunk.objects.filter((o) => o.stackIdx > 0);
   for (const o of landed) {
@@ -213,11 +221,84 @@ test('topple: landed units fall away from the hole', () => {
   }
 });
 
-test('topple: landed units are eventually eaten normally, feeding combos', () => {
+test('avalanche: detaches are bottom-up with monotonic stagger', () => {
   const H = Math.max(CONFIG.STACK_TOPPLE_MIN, 10);
   const { world, hole, sw } = makeStackFixture(H);
   hole.x = -10; hole.y = 0;
-  runSeconds(sw, world, hole, CONFIG.STACK_TOPPLE_TIME + 0.2);
+  // First tick: base tips + avalanche kicks off (base itself is on sw.falling).
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  assert.equal(sw.avalanches?.length, 1, 'expected one active avalanche');
+  const av = sw.avalanches[0];
+  // Detach schedule is per unit above the base (idx 1..H-1). Times must be
+  // monotonically increasing with stackIdx — bottom-up order.
+  const stackedUnits = [...av.units.values()].filter((u) => u.stackIdx > 0);
+  stackedUnits.sort((a, b) => a.stackIdx - b.stackIdx);
+  for (let i = 1; i < stackedUnits.length; i++) {
+    const prev = stackedUnits[i - 1];
+    const curr = stackedUnits[i];
+    assert.ok(curr.detachAt >= prev.detachAt,
+      `detach order broken: idx ${curr.stackIdx} at ${curr.detachAt} < idx ${prev.stackIdx} at ${prev.detachAt}`);
+    assert.ok(curr.detachAt - prev.detachAt >= CONFIG.STACK_AVAL_STAGGER * 0.5,
+      `stagger too small between idx ${prev.stackIdx} and ${curr.stackIdx}`);
+  }
+});
+
+test('avalanche: airborne units are in "tumbling" state, invisible to rim physics', () => {
+  const H = Math.max(CONFIG.STACK_TOPPLE_MIN, 10);
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  // Run for a mid-avalanche moment — some units should be airborne.
+  runSeconds(sw, world, hole, CONFIG.STACK_AVAL_PRELEAN_TIME + CONFIG.STACK_AVAL_STAGGER * 3);
+  const chunk = world.chunks.get('0:0,0');
+  const airborne = chunk.objects.filter((o) => o.state === 'tumbling');
+  assert.ok(airborne.length > 0, 'expected some airborne units mid-avalanche');
+  // Spatial queries never yield tumbling units — they'd otherwise get eaten
+  // pre-landing, breaking the mound.
+  const stillHere = new Set();
+  forEachObjectNear(world, 0, 0, 5000, (o) => { stillHere.add(o.idx); });
+  for (const o of airborne) {
+    assert.ok(!stillHere.has(o.idx),
+      `tumbling unit idx ${o.idx} appeared in spatial query — should be invisible`);
+  }
+});
+
+test('avalanche: final resting positions spread as a mound, not a straight line', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
+  const chunk = world.chunks.get('0:0,0');
+  const landed = chunk.objects.filter((o) => o.stackIdx > 0);
+  assert.ok(landed.length >= 5, `need enough units to test mound spread, got ${landed.length}`);
+  // A rigid-line topple would put every unit at y=0. A mound spreads in y
+  // too (the cone widens the fall direction). Require some y-variance.
+  const ys = landed.map((o) => o.y);
+  const ymin = Math.min(...ys);
+  const ymax = Math.max(...ys);
+  assert.ok(ymax - ymin > 2,
+    `expected chaotic y-spread, got range ${(ymax - ymin).toFixed(2)}`);
+});
+
+test('avalanche: settles within a bounded sim time — no unit stuck airborne', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
+  // No unit left in a transitional state; no active avalanche left.
+  const chunk = world.chunks.get('0:0,0');
+  for (const o of chunk.objects) {
+    if (o.stackIdx === 0) continue; // base is finalized separately via markEaten
+    assert.ok(o.state === 'idle',
+      `unit at idx ${o.stackIdx} stuck in state '${o.state}' past playout`);
+  }
+  assert.equal(sw.avalanches?.length ?? 0, 0, 'no active avalanche should remain');
+});
+
+test('avalanche: landed units are eventually eaten normally, feeding combos', () => {
+  const H = Math.max(CONFIG.STACK_TOPPLE_MIN, 10);
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
   const chunk = world.chunks.get('0:0,0');
   const landed = chunk.objects.filter((o) => o.stackIdx > 0);
   // Drive the hole across each landed piece by teleporting on top.
@@ -289,9 +370,9 @@ test('currentBaseOf returns the lowest-stackIdx alive unit', () => {
   assert.equal(base.stackIdx, 2);
 });
 
-// --- M2: eaten-stamp at topple START, not at landing ---------------------
+// --- M2: eaten-stamp at collapse START, not at landing ------------------
 
-test('topple: unload mid-topple does not resurrect stacked units', () => {
+test('avalanche: unload mid-collapse does not resurrect stacked units', () => {
   const w = createWorld('twr-topple-persist');
   ensureChunksAround(w, 0, 0, 3000, 3000);
   const groups = towersIn(w);
@@ -312,18 +393,18 @@ test('topple: unload mid-topple does not resurrect stacked units', () => {
   hole.x = base.x - 1; hole.y = base.y;
   const sw = createSwallow();
 
-  // One tick — base tips, topple initiated.
+  // One tick — base tips, avalanche initiated.
   swallowUpdate(sw, 1 / 60, 0, w, hole);
-  assert.equal(sw.topples.length, 1, 'expected a topple in flight');
+  assert.equal(sw.avalanches?.length, 1, 'expected an avalanche in flight');
 
   // Non-base member idxs must be persisted IMMEDIATELY (not at landing) —
-  // otherwise an unload during the 0.5s topple resurrects them on regen.
+  // otherwise an unload during the collapse resurrects them on regen.
   const eaten = w.eaten.get(base.ck);
-  assert.ok(eaten, 'eaten set for base chunk must be created at topple start');
+  assert.ok(eaten, 'eaten set for base chunk must be created at collapse start');
   for (const o of candidate.list) {
     if (o.stackIdx === 0) continue;
     assert.ok(eaten.has(o.idx),
-      `unit at stackIdx ${o.stackIdx} (idx ${o.idx}) must be eaten-stamped at topple start`);
+      `unit at stackIdx ${o.stackIdx} (idx ${o.idx}) must be eaten-stamped at collapse start`);
   }
 
   // And the whole round-trip through unload+reload must leave no stacked
@@ -340,16 +421,14 @@ test('topple: unload mid-topple does not resurrect stacked units', () => {
   }
 });
 
-// --- S1: landing-line length must stay inside PAD ------------------------
+// --- S1: mound extent must stay inside PAD ------------------------------
 
-test('topple: max-height max-slot tower lands inside 2× chunkSize of the base', () => {
+test('avalanche: max-height max-slot tower lands inside 2× chunkSize of the base', () => {
   // Fabricate a beacon-scale tower: max height, big unitR (a slot-5 base
-  // r=22 × SLOT_MULTS[5]=8.95 ≈ 197, times a tiny +8% jitter). Level-0
-  // chunks are CONFIG.CHUNK wide (480). Uncompressed, the landing line
-  // would run (2H−1)×unitR ≈ 9000+ world units — far outside PAD=3 chunks.
-  // The fix caps the line at 2 × chunkSizeAt(level), so every landed unit
-  // (and forEachObjectNear queried at the line's far end) sits inside the
-  // padded query window of the base's chunk.
+  // r=22 × SLOT_MULTS[5]=8.95 ≈ 197). Level-0 chunks are CONFIG.CHUNK wide
+  // (480). Uncompressed, an avalanche mound would fling units many chunks
+  // past PAD — the cap keeps the mound inside 2 × chunkSizeAt(level), safely
+  // inside PAD=3, so every landed unit stays reachable by forEachObjectNear.
   const H = 24;
   const unitR = 200;
   const objects = [];
@@ -359,19 +438,15 @@ test('topple: max-height max-slot tower lands inside 2× chunkSize of the base',
   const world = createWorld('s1');
   world.chunks.set('0:0,0', { level: 0, cx: 0, cy: 0, band: 0, objects });
   const hole = createHole();
-  // Pump the hole up so a beacon-scale base (r=200) is edible — this test
-  // is about landing math, not rim physics: a real player reaching a
-  // beacon this big has a hole even bigger.
   hole.r = unitR * 2;
   hole.potential = unitR * 2;
   hole.level = 20;
   const sw = createSwallow();
-  // Hole to the left of the base so the topple falls to +x.
   hole.x = -1; hole.y = 0;
   const chunkSize = CONFIG.CHUNK; // level 0
   const cap = 2 * chunkSize;
 
-  const events = runSeconds(sw, world, hole, CONFIG.STACK_TOPPLE_TIME + 0.2);
+  const events = runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
 
   // Every landed non-base unit is within cap of the pivot (0, 0).
   const chunk = world.chunks.get('0:0,0');
@@ -383,11 +458,11 @@ test('topple: max-height max-slot tower lands inside 2× chunkSize of the base',
       `landed unit at (${o.x.toFixed(0)}, ${o.y.toFixed(0)}) — dist ${d.toFixed(0)} exceeds cap ${cap}`);
   }
 
-  // The line's far end must still be reachable by forEachObjectNear.
+  // The mound's far edge must still be reachable by forEachObjectNear.
   const farthest = landed.reduce((a, b) => (Math.hypot(a.x, a.y) > Math.hypot(b.x, b.y) ? a : b));
   let seen = 0;
   forEachObjectNear(world, farthest.x, farthest.y, unitR * 1.5, (o) => {
     if (o.stackIdx > 0) seen++;
   });
-  assert.ok(seen >= 1, `forEachObjectNear at the line's far end returned no landed units`);
+  assert.ok(seen >= 1, `forEachObjectNear at the mound's far edge returned no landed units`);
 });
