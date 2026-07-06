@@ -25,14 +25,19 @@ js/hole.js           player state: easing movement, DISCRETE size ladder
                      (r snaps to radiusForLevel; potential accumulates
                      between rungs), holeProgress, sizeLabel
 js/swallow.js        vacuum pull, tip-in fall state machine, combo + scoring;
-                     tower slump + topple animations; emits events (pure —
-                     presentation reacts to events)
+                     kicks the tower avalanche off when a base tips; emits
+                     events (pure — presentation reacts to events)
+js/collapse.js       tower collapse state machine: per-unit avalanche.
+                     Bottom-up detach with a Jenga pre-lean beat, ballistic
+                     bodies (fake z / vz / spin / gravity + damped bounces),
+                     and deterministic settle targets (the S1 cap invariant
+                     still holds). Owns sw.avalanches; called each tick.
 js/stacks.js         pure helpers for vertical stacks ("towers"): grouping
                      by stackId, current-base promotion, sibling minting
                      (spawnStackFromBase — called from world.js chunk
-                     generation), topple geometry. Only the lowest alive
-                     unit of a tower is interactive; the rest sit in
-                     state='stacked' until slumped up.
+                     generation). Only the lowest alive unit of a tower is
+                     interactive; the rest sit in state='stacked' until an
+                     avalanche detaches them into state='tumbling'.
 js/camera.js         eased follow + lookahead, size-driven zoom, shake (pure)
 js/input.js          keyboard steer (WASD/arrows) + touch drag → {x,y,mag}
 js/audio.js          WebAudio synth: pop/gulp/combo/levelup/ambient; mute persists
@@ -73,10 +78,13 @@ js/render.js         two passes for the pseudo-3D view:
                      (pit→falling(clipped)→rim) → tease rings → fxWorld.
                      BILLBOARD (upright): shadows → sprites y-sorted (lifted,
                      tilt-lean toward hole) → score floaters
-js/render-sprites.js drawSingle + drawTower — pure per-item billboard
-                     draw code (world→screen mapping, lean, slump/topple
-                     animation branches). Called from render.js's
-                     billboard pass.
+js/render-sprites.js drawSingle + drawTower + drawTumbling — pure
+                     per-item billboard draw code. Tower rendering carries
+                     the Part A verticality cues (tight overlap, per-unit
+                     jitter/perspective, idle sway, capsule + widened base
+                     shadow). drawTumbling handles airborne avalanche
+                     units (z-lift + spin + separated ground shadow).
+                     Called from render.js's billboard pass.
 js/hud.js            DOM HUD + overlays + best-run localStorage
 js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ```
@@ -142,30 +150,53 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   ONE item at ONE ground position, each with `stackId` (unique per chunk)
   and `stackIdx` (0 = base, increases upward). ONLY the lowest alive unit
   is 'idle' — the rest sit in 'stacked' so spatial queries and rim
-  physics skip them; only the renderer walks stacked/toppling units, and
-  it draws them as a bottom-up vertical strip pinned to the base's (x, y).
-  Slump promotes the next surviving stack unit to 'idle' after a 0.12 s
-  animation. Topple (alive ≥ STACK_TOPPLE_MIN = 8) rotates the strip 90°
-  about the base pivot over 0.5 s (matches FALL_TIME); each unit lands as
-  an ordinary 'idle' ground object with `landed:true`, spaced one
-  diameter apart along the fall line (away from the hole). **Non-base
-  member idxs are stamped into world.eaten at topple START**, not at
-  landing — the 0.5 s animation is a window where an unlucky unload+reload
-  would otherwise resurrect the tower. markEaten is idempotent, and no
-  live query path filters by world.eaten, so landed units stay eatable
-  by rim physics while their chunk is loaded. **Landing-line length is
-  capped at 2 × chunkSizeAt(level) of the base's chunk** — a deep-cycle
-  beacon (24 units × unitR≈200 = 9400 world units uncompressed) would
-  otherwise land outside PAD=3 and be invisible to every spatial query;
-  the fix compresses per-unit spacing (scale stored on the topple record)
-  so units land as dense fallen dominoes but emoji sizes are untouched.
-  The same scale is applied in the mid-topple render path.
+  physics skip them; the renderer draws the column as a bottom-up
+  vertical strip pinned to the base's (x, y) with several verticality
+  cues so a still tower reads unambiguously vs. a ground line of the
+  same emoji:
+  - Tight unit overlap (`STACK_UNIT_OVERLAP` = 0.55 of unit height) —
+    each unit visibly sits ON the one below.
+  - Deterministic per-unit x-jitter + rotation, hashed by (stackId,
+    stackIdx) — hand-stacked feel, stable frame-to-frame.
+  - Perspective scale up the column (~+1.5%/idx, capped at +25%) —
+    higher = closer to the camera-above-scene.
+  - Idle sway around the base pivot (~2.5° at the tip of a tall column,
+    ramped by alive height, phased per stackId). Disabled under
+  `prefers-reduced-motion`. This is THE motion cue the ground can't fake.
+  - Soft dark capsule + widened base shadow — ambient occlusion that
+    binds the sprites into one silhouette.
+- **Avalanche collapse** (js/collapse.js): when a tower base tips into the
+  hole, its stacked units detach BOTTOM-UP with a small stagger. Tall
+  towers (alive ≥ `STACK_TOPPLE_MIN` = 8) also get a Jenga "losing-balance"
+  pre-lean beat (~0.15 s, ~10°) before the first detach. Each detached
+  unit becomes a ballistic body with fake `z` height, horizontal velocity
+  in a cone away from the hole, gravity + 1–2 damped bounces, and spin
+  — then it settles as an ordinary 'idle' ground object at a
+  **deterministic target** (hashed by stackId + stackIdx). The flight is
+  randomized (Math.random-flavored fx), only the resting spot is fixed;
+  that determinism keeps the S1 cap invariant testable. Airborne units
+  live in a new `'tumbling'` state that rim physics ignores, and the
+  renderer draws them via `drawTumbling` with a smaller ground shadow
+  offset from the sprite (the shadow-vs-sprite separation is the height
+  cue). Short-pile slumps use the same system with tight target radii so
+  units mostly hop into the hole, feeding the eat-through-tower combo
+  chain. **Non-base member idxs are stamped into world.eaten at collapse
+  START** — a chunk that unloads and regenerates mid-collapse must not
+  resurrect the tower. markEaten is idempotent, and no live query path
+  filters by world.eaten, so landed units stay eatable by rim physics
+  while their chunk is loaded. **Every settled position stays within
+  `2 × chunkSizeAt(level)` of the base's chunk** — a deep-cycle beacon
+  (24 units × unitR ≈ 200) would otherwise scatter outside PAD=3 and be
+  invisible to every spatial query. Presentation-only fx: throttled dust
+  puffs (`avalancheDust`) + soft thumps (`avalancheThump`) on bounce
+  clusters; the historical `topple` event still fires once when the
+  avalanche fully settles (chunky payoff SFX + screen shake).
   Partially-eaten towers survive unload via world.eaten alone —
   `normalizeBases` (in stacks.js, called after the eaten-filter) promotes
   the lowest surviving 'stacked' unit to 'idle' on regen. Stack units'
   idxs consume the chunk RNG deterministically: base attempt takes 1 idx
   whether accepted or rejected; a successful base then consumes H−1 more
-  for its siblings via `spawnStackFromBase`. Skipping 'falling'/'toppling'
+  for its siblings via `spawnStackFromBase`. Skipping 'falling'/'tumbling'
   in `normalizeBases` is load-bearing — otherwise the falling base would
   get re-marked 'idle' mid-fall and re-tip.
 - **Balance is sim-tuned:** HOLE_R0 (26.4), GROWTH_K (0.0288), and the oasis

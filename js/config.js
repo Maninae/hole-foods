@@ -80,8 +80,6 @@ export const CONFIG = {
   STACK_CAPSULE_WIDTH: 1.05,    // capsule width, multiples of unit diameter (slightly wider than sprite)
   STACK_SHADOW_WIDEN: 1.35,     // tower base shadow is wider than a single's (visually anchors the column)
   STACK_SHADOW_DARKEN: 1.5,     // and darker
-  STACK_SLUMP_TIME: 0.12,       // (legacy — Part B unified slump into the avalanche system)
-  STACK_TOPPLE_TIME: 0.5,       // (legacy — same)
   STACK_TOPPLE_MIN: 8,          // alive units required for the tall-tower avalanche path (else slump-avalanche)
   STACK_TOPPLE_FLOATER_CAP: 10, // temporarily raised score-floater cap during a collapse
 

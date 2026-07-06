@@ -28,7 +28,7 @@ export function groupStacks(objects) {
 }
 
 // Alive units of a specific tower, spanning any chunk (idle + stacked +
-// toppling all count). Used by the collapse code to decide slump vs topple.
+// tumbling all count). Used by the collapse code to size the avalanche.
 export function aliveInStack(world, stackId) {
   const out = [];
   for (const chunk of world.chunks.values()) {
@@ -49,10 +49,10 @@ export function currentBaseOf(list) {
   return base;
 }
 
-// After a chunk regenerates (or a slump animation completes) the lowest
-// surviving 'stacked' unit needs to become 'idle'; higher units stay
-// 'stacked'. Units mid-animation ('falling' base, 'toppling' siblings)
-// are untouched — they'll resolve on their own timeline.
+// After a chunk regenerates the lowest surviving 'stacked' unit needs to
+// become 'idle'; higher units stay 'stacked'. Units mid-animation
+// ('falling' base, 'tumbling' siblings) are untouched — they'll resolve
+// on their own timeline.
 export function normalizeBases(objects) {
   const groups = groupStacks(objects);
   for (const list of groups.values()) {
