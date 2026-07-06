@@ -273,10 +273,22 @@ export function renderScene(R, state) {
           tw = {
             stackId: o.stackId,
             members: [],
+            // Pivot is the base's ground position. If a topple record
+            // exists for this stackId, use its cached baseX/Y/unitR (the
+            // authoritative pre-topple pivot); otherwise seed from the
+            // first-iterated member. Toppling units don't move until
+            // they land, so the two happen to agree today — the cache
+            // makes that no longer load-bearing.
             baseX: o.x, baseY: o.y,
             unitR: o.r, e: o.e, hue: o.hue, rot: o.rot || 0,
             tilt: 0,
           };
+          const tpForSeed = sw.topples.find((tp) => tp.stackId === o.stackId);
+          if (tpForSeed) {
+            tw.baseX = tpForSeed.baseX;
+            tw.baseY = tpForSeed.baseY;
+            tw.unitR = tpForSeed.unitR;
+          }
           towerGroups.set(o.stackId, tw);
         }
         tw.members.push(o);
