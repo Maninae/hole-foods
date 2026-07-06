@@ -184,11 +184,27 @@ function startTopple(sw, world, hole, base) {
   // physics ignores them mid-rotation. The base stays 'falling' (already).
   // Also find the tower's max alive stackIdx — the tip of the column and
   // therefore the far end of the landing line.
+  //
+  // Stamp each toppling unit's idx into world.eaten IMMEDIATELY, at topple
+  // start (not at landing). This closes the unload-mid-topple window: a
+  // chunk that unloads and regens during the 0.5s topple animation must
+  // not resurrect the tower. markEaten is idempotent — rim physics still
+  // eats the landed units normally and their finalizeSwallow call is a
+  // no-op on the eaten set. No live path filters queries by world.eaten,
+  // so the landed units stay eatable while their chunk is loaded.
   let maxIdx = 0;
+  let toppleEaten = world.eaten.get(base.ck);
+  if (!toppleEaten) {
+    toppleEaten = new Set();
+    world.eaten.set(base.ck, toppleEaten);
+  }
   for (const chunk of world.chunks.values()) {
     for (const o of chunk.objects) {
       if (o.stackId !== base.stackId) continue;
-      if (o.state === 'stacked') o.state = 'toppling';
+      if (o.state === 'stacked') {
+        o.state = 'toppling';
+        toppleEaten.add(o.idx);
+      }
       if (o.stackIdx > maxIdx) maxIdx = o.stackIdx;
     }
   }
@@ -242,13 +258,12 @@ function updateTopples(sw, dt, world, events) {
     // world.eaten so the chunk can't respawn them if it unloads mid-chase.
     const chunk = world.chunks.get(tp.ck);
     if (chunk) {
-      let set = world.eaten.get(tp.ck);
-      if (!set) { set = new Set(); world.eaten.set(tp.ck, set); }
       for (const o of chunk.objects) {
         if (o.stackId !== tp.stackId || o.state !== 'toppling') continue;
         // Apply the landing-line compression factor: same visual size for
         // each unit, but they overlap along the fall line so the whole
         // line stays inside the base chunk's padded query window.
+        // (Idxs already stamped in world.eaten at topple start — see M2.)
         const p = landedPosition(
           tp.baseX, tp.baseY, o.stackIdx, tp.unitR * tp.scale, tp.dirX, tp.dirY,
         );
@@ -258,7 +273,6 @@ function updateTopples(sw, dt, world, events) {
         o.landed = true; // renderer draws landed units as ordinary singles
         o.tilt = 0;
         o.vx = 0; o.vy = 0;
-        set.add(o.idx);
       }
     }
     events.push({

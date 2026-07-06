@@ -289,6 +289,57 @@ test('currentBaseOf returns the lowest-stackIdx alive unit', () => {
   assert.equal(base.stackIdx, 2);
 });
 
+// --- M2: eaten-stamp at topple START, not at landing ---------------------
+
+test('topple: unload mid-topple does not resurrect stacked units', () => {
+  const w = createWorld('twr-topple-persist');
+  ensureChunksAround(w, 0, 0, 3000, 3000);
+  const groups = towersIn(w);
+  let candidate = null;
+  for (const [id, list] of groups) {
+    if (list.length >= CONFIG.STACK_TOPPLE_MIN) { candidate = { id, list }; break; }
+  }
+  assert.ok(candidate, `need a real tower with ≥ ${CONFIG.STACK_TOPPLE_MIN} units`);
+  candidate.list.sort((a, b) => a.stackIdx - b.stackIdx);
+  const base = candidate.list[0];
+
+  // Pump hole to eat the base (real gameplay would have a big-enough hole
+  // by the time a beacon-scale tower shows up).
+  const hole = createHole();
+  hole.r = base.r * 2;
+  hole.potential = base.r * 2;
+  hole.level = 20;
+  hole.x = base.x - 1; hole.y = base.y;
+  const sw = createSwallow();
+
+  // One tick — base tips, topple initiated.
+  swallowUpdate(sw, 1 / 60, 0, w, hole);
+  assert.equal(sw.topples.length, 1, 'expected a topple in flight');
+
+  // Non-base member idxs must be persisted IMMEDIATELY (not at landing) —
+  // otherwise an unload during the 0.5s topple resurrects them on regen.
+  const eaten = w.eaten.get(base.ck);
+  assert.ok(eaten, 'eaten set for base chunk must be created at topple start');
+  for (const o of candidate.list) {
+    if (o.stackIdx === 0) continue;
+    assert.ok(eaten.has(o.idx),
+      `unit at stackIdx ${o.stackIdx} (idx ${o.idx}) must be eaten-stamped at topple start`);
+  }
+
+  // And the whole round-trip through unload+reload must leave no stacked
+  // resurrection (base may or may not be there depending on finalize timing).
+  ensureChunksAround(w, 100000, 100000, 1200, 900);
+  ensureChunksAround(w, base.x, base.y, 3000, 3000);
+  const rebornGroups = towersIn(w);
+  const reborn = rebornGroups.get(base.stackId);
+  if (reborn) {
+    for (const o of reborn) {
+      assert.notEqual(o.state, 'stacked',
+        `unit at stackIdx ${o.stackIdx} resurrected as 'stacked' after unload+reload`);
+    }
+  }
+});
+
 // --- S1: landing-line length must stay inside PAD ------------------------
 
 test('topple: max-height max-slot tower lands inside 2× chunkSize of the base', () => {
