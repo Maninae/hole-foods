@@ -96,10 +96,10 @@ newRun();
 function handleEvents(events) {
   const { hole, fx, cam, sw, progress } = game;
   const unlocks = [];
-  // During a tower collapse (slump or topple) the swallow cascade fires many
-  // "+points" chips in quick succession — raise the floater cap so the
-  // "chip pile" reads as intended instead of getting muted after 7.
-  const collapsing = sw && (sw.slumps.length > 0 || sw.topples.length > 0);
+  // During a tower avalanche the swallow cascade fires many "+points"
+  // chips in quick succession — raise the floater cap so the "chip pile"
+  // reads as intended instead of getting muted after 7.
+  const collapsing = sw && sw.avalanches.length > 0;
   const floaterCap = collapsing ? CONFIG.STACK_TOPPLE_FLOATER_CAP : 7;
   for (const ev of events) {
     if (ev.type === 'swallow') {
@@ -137,8 +137,18 @@ function handleEvents(events) {
       // Radius milestones are cheapest to check on level-up (hole.r only
       // changes then), so we ingest the current radius here.
       unlocks.push(...ingest(progress, { type: 'radius', r: hole.r }));
+    } else if (ev.type === 'avalancheDust') {
+      // Throttled dust puff on bounce clusters (see js/collapse.js).
+      if (fx.parts.length < 220) {
+        const n = 6;
+        suckBurst(fx, Math.random, ev.x, ev.y, ev.unitR * 1.6, 30, n);
+      }
+    } else if (ev.type === 'avalancheThump') {
+      // Throttled soft thump — subtler than the old one-shot topple sfx.
+      audio.pop(0.6);
     } else if (ev.type === 'topple') {
-      // Chunky thump + a dust puff on the ground where the base was.
+      // Fired once when an avalanche fully settles — big chunky thump and
+      // a screen shake to reward the payoff moment.
       audio.topple();
       if (fx.parts.length < 220) {
         const n = 22;

@@ -15,7 +15,7 @@ import { holeProgress } from './hole.js';
 import { drawFxWorld, drawFxText } from './particles.js';
 import { drawLevelFxGround, drawLevelFxBillboard } from './levelfx.js';
 import { CONFIG } from './config.js';
-import { drawSingle, drawTower } from './render-sprites.js';
+import { drawSingle, drawTower, drawTumbling, drawTumblingShadow } from './render-sprites.js';
 
 export function createRenderer(canvas) {
   const R = {
@@ -159,53 +159,69 @@ export function renderScene(R, state) {
   });
   ctx.globalAlpha = 1;
 
-  // Visible objects — plain singles (state='idle') plus tower groups
-  // (columns of stacked/toppling units drawn as one thing, sorted by the
-  // pivot y). Sub-pixel objects/towers are skipped for cheap LOD.
-  const visible = [];             // plain singles: {type: 'single', y, obj}
-  const towerGroups = new Map();  // stackId -> {members, baseX, baseY, unitR, e, hue, rot, tilt, sortY}
+  // Visible objects — plain singles, tower groups (stacked+idle column
+  // members), and airborne "tumbling" units (mid-avalanche ballistic
+  // bodies drawn independently with their own ground shadows). Sub-pixel
+  // objects are skipped for cheap LOD.
+  const visible = [];             // {type: 'single'|'tower'|'tumbling', y, ...}
+  const towerGroups = new Map();  // stackId -> {members, baseX, baseY, unitR, ...}
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     for (const o of chunk.objects) {
       if (o.r * t.scale < 1) continue;
       const m = o.r * 1.4;
-      if (o.x < x0 - m || o.x > x1 + m || o.y < y0 - m || o.y > y1 + m) continue;
+      // Tumbling units may have flown off their chunk rect — skip the rect
+      // filter for them (they get culled later by the airborne loop below).
+      if (o.state !== 'tumbling') {
+        if (o.x < x0 - m || o.x > x1 + m || o.y < y0 - m || o.y > y1 + m) continue;
+      }
       const isColumnMember = o.stackId && !o.landed
-        && (o.state === 'idle' || o.state === 'stacked' || o.state === 'toppling');
+        && (o.state === 'idle' || o.state === 'stacked');
       if (isColumnMember) {
         let tw = towerGroups.get(o.stackId);
         if (!tw) {
           tw = {
             stackId: o.stackId,
             members: [],
-            // Pivot is the base's ground position. If a topple record
-            // exists for this stackId, use its cached baseX/Y/unitR (the
-            // authoritative pre-topple pivot); otherwise seed from the
-            // first-iterated member. Toppling units don't move until
-            // they land, so the two happen to agree today — the cache
-            // makes that no longer load-bearing.
             baseX: o.x, baseY: o.y,
             unitR: o.r, e: o.e, hue: o.hue, rot: o.rot || 0,
             tilt: 0,
           };
-          const tpForSeed = sw.topples.find((tp) => tp.stackId === o.stackId);
-          if (tpForSeed) {
-            tw.baseX = tpForSeed.baseX;
-            tw.baseY = tpForSeed.baseY;
-            tw.unitR = tpForSeed.unitR;
+          // If an avalanche is running for this tower (pre-lean phase),
+          // use its cached pivot so the still-stacked units draw around
+          // the authoritative pre-lean base, not whichever member
+          // happened to iterate first.
+          const av = sw.avalanches.find((a) => a.stackId === o.stackId);
+          if (av) {
+            tw.baseX = av.baseX;
+            tw.baseY = av.baseY;
+            tw.unitR = av.unitR;
           }
           towerGroups.set(o.stackId, tw);
         }
         tw.members.push(o);
         if (o.state === 'idle') tw.tilt = o.tilt || 0;
       } else if (o.state === 'idle') {
-        // Plain single (includes landed post-topple units).
+        // Plain single (includes landed post-avalanche units).
         visible.push({ type: 'single', y: o.y, obj: o });
       }
+      // 'tumbling' units are handled below in the airborne loop.
     }
   });
   // Merge tower groups into the sortable list.
   for (const tw of towerGroups.values()) {
     visible.push({ type: 'tower', y: tw.baseY, tower: tw });
+  }
+  // Add airborne tumbling units by walking sw.avalanches directly — they
+  // move independently of chunk objects during flight, so we pull real
+  // positions off the avalanche's unit sim state.
+  for (const av of sw.avalanches) {
+    for (const u of av.units.values()) {
+      if (u.phase !== 'tumbling') continue;
+      // Rough cull: skip if visibly off-screen with generous padding.
+      const m = av.unitR * 3;
+      if (u.x < x0 - m || u.x > x1 + m || u.y < y0 - m || u.y > y1 + m) continue;
+      visible.push({ type: 'tumbling', y: u.y, u, av });
+    }
   }
   visible.sort((a, b) => a.y - b.y);
 
@@ -247,14 +263,16 @@ export function renderScene(R, state) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // Elliptical contact shadows first, so a later sprite covers a neighbor's
-  // shadow instead of the reverse. Towers only get a single shadow at the
-  // base pivot — no shadow per stacked unit. A toppling tower fades its
-  // shadow with topple progress: at t=0 the whole column still stands
-  // over the pivot, but by t=1 the base is gone and the strip has fallen
-  // sideways, so the stationary shadow at the pivot is a visual lie
-  // (also, it would pop out abruptly the frame the topple completes).
+  // shadow instead of the reverse. Towers get a widened/darker base shadow
+  // (Part A: the column reads as ONE object). Airborne tumbling units get
+  // their OWN small shadow that stays on the ground while the sprite lifts
+  // — the shadow-vs-sprite separation is the readability cue for height.
   const baseShadowAlpha = 0.18;
   for (const item of visible) {
+    if (item.type === 'tumbling') {
+      drawTumblingShadow(ctx, item.u, item.av, t, baseShadowAlpha);
+      continue;
+    }
     let cx; let cy; let cr; let alpha = baseShadowAlpha;
     let widen = 1;
     if (item.type === 'single') {
@@ -262,15 +280,20 @@ export function renderScene(R, state) {
       cx = o.x; cy = o.y; cr = o.r;
     } else {
       cx = item.tower.baseX; cy = item.tower.baseY; cr = item.tower.unitR;
-      // Widen and darken the tower base shadow so the column reads as ONE
-      // object sitting on the ground, not a chain of independent sprites.
       widen = CONFIG.STACK_SHADOW_WIDEN;
       alpha = baseShadowAlpha * CONFIG.STACK_SHADOW_DARKEN;
-      const tp = sw.topples.find((t2) => t2.stackId === item.tower.stackId);
-      if (tp) {
-        const k = Math.min(1, tp.t / tp.duration);
-        alpha *= (1 - k);
-        if (alpha <= 0.001) continue; // fully faded — skip the ellipse entirely
+      // Fade the tower's base shadow as an avalanche progresses: the
+      // stacked column above the base shrinks unit-by-unit, so the wide
+      // dark ellipse under the pivot becomes wrong. By the time every
+      // unit has detached, the tower is gone — hide the shadow entirely.
+      const av = sw.avalanches.find((a) => a.stackId === item.tower.stackId);
+      if (av) {
+        const remainingStacked = [...av.units.values()]
+          .filter((u2) => u2.phase === 'stacked').length;
+        const total = av.units.size;
+        const frac = total ? remainingStacked / total : 0;
+        alpha *= frac;
+        if (alpha <= 0.001) continue;
       }
     }
     ctx.fillStyle = `rgba(25, 20, 50, ${alpha})`;
@@ -283,13 +306,15 @@ export function renderScene(R, state) {
     ctx.fill();
   }
 
-  // Sprites, y-sorted. Singles are lifted so they stand on the ground plane;
-  // towers draw as a vertical strip of upright sprites, bottom-up, with the
-  // base's teeter lean amplifying up the column and a gentle idle sway for
-  // tall columns (the Part A verticality cue).
+  // Sprites, y-sorted. Singles lift so they stand on the ground plane;
+  // towers draw as a vertical strip of upright sprites with jitter,
+  // perspective, and sway (Part A); airborne tumbling units render at
+  // their (x, y) lifted by z with spin (Part B).
   for (const item of visible) {
     if (item.type === 'single') {
       drawSingle(ctx, item.obj, hole, t, dpr);
+    } else if (item.type === 'tumbling') {
+      drawTumbling(ctx, item.u, item.av, t, dpr);
     } else {
       drawTower(ctx, item.tower, hole, sw, t, dpr, time);
     }

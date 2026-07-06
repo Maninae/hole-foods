@@ -110,6 +110,8 @@ export const CONFIG = {
   STACK_AVAL_MAX_FLIGHT: 3.5,      // seconds — hard cap on airborne time so a stuck unit can't lock
   STACK_AVAL_DUST_INTERVAL: 0.06,  // min seconds between dust puffs during an avalanche (throttle)
   STACK_AVAL_THUMP_INTERVAL: 0.11, // min seconds between thump sfx during an avalanche (throttle)
-  STACK_AVAL_MOUND_SPREAD: 0.9,    // final mound spread as fraction of the 2×chunkSize landing cap
+  STACK_AVAL_MOUND_SPREAD: 0.9,    // tall-tower mound spread, fraction of the 2×chunkSize landing cap
                                    // (a tall tower's units settle across ~90% of the cap radius, chaotically)
+  STACK_AVAL_SLUMP_RADIUS_MULT: 0.15, // short-pile slump target radius as fraction of unitR × height
+                                     // — small so units mostly hop into the hole, feeding the combo chain
 };

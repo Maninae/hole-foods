@@ -5,7 +5,7 @@
 import { CONFIG } from './config.js';
 import { forEachObjectNear, markEaten } from './world.js';
 import { eat } from './hole.js';
-import { initiateCollapse, updateSlumps, updateTopples } from './collapse.js';
+import { initiateCollapse, updateAvalanches } from './collapse.js';
 
 export function createSwallow() {
   return {
@@ -14,9 +14,8 @@ export function createSwallow() {
     lastEat: -Infinity,
     falling: [],          // { obj, t, fromX, fromY, spinDir }
     disturbed: new Set(), // objects the rim has engaged; updated until settled
-    // Vertical stack collapse animations:
-    slumps: [],           // { stackId, ck, t, duration } — column drops one unit-height
-    topples: [],          // { stackId, ck, baseX, baseY, dirX, dirY, unitR, t, duration }
+    // Tower collapse: unified per-unit avalanche (see js/collapse.js).
+    avalanches: [],
   };
 }
 
@@ -147,8 +146,7 @@ export function swallowUpdate(sw, dt, now, world, hole) {
   const events = [];
   rimPhysics(sw, dt, now, world, hole);
   updateFalling(sw, dt, now, world, hole, events);
-  updateSlumps(sw, dt, world, events);
-  updateTopples(sw, dt, world, events);
+  updateAvalanches(sw, dt, world, events);
   decayCombo(sw, now, events);
   return events;
 }

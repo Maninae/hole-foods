@@ -63,10 +63,46 @@ export function drawSingle(ctx, o, hole, t, dpr) {
   drawEmoji(ctx, o.e, sx, sy - lift + sink, rScreen, (o.rot || 0) + leanRot, dpr);
 }
 
+// A tumbling (airborne) unit mid-avalanche. Position (u.x, u.y) is the
+// unit's ground shadow center; the sprite lifts by u.z (a fake vertical
+// height) and spins by u.rot. The shadow is drawn separately in the shadow
+// pass so a later sprite doesn't cover a neighbor's shadow.
+export function drawTumbling(ctx, u, av, t, dpr) {
+  const rScreen = av.unitR * t.scale;
+  const sx = u.x * t.scale + t.tx;
+  const sy = u.y * t.scaleY + t.ty;
+  // Screen-space lift: z is a world-Y-equivalent, projected the same way
+  // ground-plane objects are (via t.scaleY / ISO squash) so the sprite
+  // reads as truly airborne.
+  const liftScreen = u.z * t.scaleY;
+  drawEmoji(ctx, u.obj.e, sx, sy - liftScreen - rScreen * 0.22, rScreen, u.rot, dpr);
+}
+
+// Tumbling unit's ground shadow: shrinks and lightens with height so the
+// eye reads the sprite as lifted off the plane. Called from render.js's
+// shadow pass (before the airborne sprite itself is drawn).
+export function drawTumblingShadow(ctx, u, av, t, baseAlpha) {
+  const rScreen = av.unitR * t.scale;
+  // z in world units — normalize by unit diameter for the falloff curve.
+  const zNorm = u.z / (2 * av.unitR);
+  const falloff = 1 / (1 + zNorm * 0.9);
+  const alpha = baseAlpha * falloff;
+  if (alpha <= 0.002) return;
+  const sx = u.x * t.scale + t.tx;
+  const sy = u.y * t.scaleY + t.ty;
+  const rx = rScreen * 0.75 * falloff;
+  const ry = rx * 0.38;
+  ctx.fillStyle = `rgba(25, 20, 50, ${alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(sx, sy + ry * 0.35, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 // A tower group as a vertical strip of upright sprites, bottom-up.
 // State branches:
 //   - idle/stacked: sits at pivot with lift, jitter, perspective, sway.
-//   - toppling:     legacy rigid-rotation branch (used until Part B lands).
+//   - pre-lean:     during an avalanche's Jenga beat, the whole column
+//                   tilts by an interpolated angle away from the hole.
 export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   const rScreen = tw.unitR * t.scale;
   const unitHeightScreen = 2 * rScreen; // billboard vertical diameter
@@ -84,9 +120,10 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   }
   const baseTilt = tw.tilt || 0;
 
-  // Any active slump / topple driving this tower?
-  const slump = sw.slumps.find((s) => s.stackId === tw.stackId);
-  const topple = sw.topples.find((tp) => tp.stackId === tw.stackId);
+  // Any active avalanche for this tower? It supplies pre-lean angle and
+  // authoritative pivot (the tower.baseX/Y already got seeded from it in
+  // render.js if one exists).
+  const av = sw.avalanches.find((a) => a.stackId === tw.stackId);
 
   // Determine baseStackIdx: lowest idle/stacked stackIdx among members
   // (the "effective ground" of the column). Tower height = max - base + 1
@@ -102,34 +139,45 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   if (!isFinite(baseStackIdx)) baseStackIdx = 0;
   if (!isFinite(topStackIdx)) topStackIdx = baseStackIdx;
   const aliveHeight = Math.max(1, topStackIdx - baseStackIdx + 1);
+  const effectiveBase = baseStackIdx;
 
-  const slumpProgress = slump ? Math.min(1, slump.t / slump.duration) : 0;
-  const effectiveBase = slump ? slump.oldBaseStackIdx + slumpProgress : baseStackIdx;
-
-  const toppleAngle = topple ? Math.min(1, topple.t / topple.duration) * (Math.PI / 2) : 0;
+  // Pre-lean angle: during an avalanche's Jenga beat, the whole column
+  // tilts smoothly from 0 to STACK_AVAL_PRELEAN_DEG in the spread direction.
+  // After the pre-lean, still-stacked units keep the lean (visible on the
+  // top of a mid-detach column).
+  let preLeanAngle = 0;
+  let preLeanSign = 0;
+  if (av && av.preLeanUntil > 0) {
+    const k = Math.min(1, av.t / av.preLeanUntil);
+    preLeanAngle = CONFIG.STACK_AVAL_PRELEAN_DEG * DEG * k;
+    // Sign follows av.dirX: positive dirX → column leans to the right.
+    preLeanSign = av.dirX >= 0 ? 1 : -1;
+  }
 
   // Idle sway: the column pivots as one body around its base. Amplitude
-  // ramps with height (so 6-unit piles barely move, tall columns wave
-  // noticeably at the tip). Phase per-stack from a stable hash. Reduced
-  // motion cuts it entirely.
+  // ramps with height. Phase per-stack from a stable hash. Reduced motion
+  // cuts it entirely. Pre-lean overrides the sway (the column is losing
+  // balance, not idling).
   let swayAngle = 0;
-  if (!REDUCED_MOTION && !topple) {
+  if (!REDUCED_MOTION && !av) {
     const heightRamp = Math.min(1, aliveHeight / CONFIG.STACK_SWAY_HEIGHT_REF);
     const amp = CONFIG.STACK_SWAY_TOP_DEG * DEG * heightRamp;
     const phase = hash01(tw.stackId, 0, 0x5a17) * Math.PI * 2;
     swayAngle = amp * Math.sin((time * 2 * Math.PI) / CONFIG.STACK_SWAY_PERIOD + phase);
   }
+  // Compose sway with pre-lean into one column-wide rotation.
+  const columnAngle = swayAngle + preLeanAngle * preLeanSign;
 
   // Soft ambient-occlusion capsule behind the column — subtle dark shape
-  // that binds the sprites into one silhouette. Skipped during slump/topple
-  // (the column is moving; the capsule would trail wrong).
-  if (!slump && !topple && aliveHeight >= 2) {
+  // that binds the sprites into one silhouette. Skipped during an
+  // avalanche (the column is fragmenting; the capsule would trail wrong).
+  if (!av && aliveHeight >= 2) {
     const capsuleWidth = unitHeightScreen * CONFIG.STACK_CAPSULE_WIDTH;
     const capsuleHeight = (aliveHeight - 1) * step + unitHeightScreen;
     const capsuleTopLift = (topStackIdx - effectiveBase) * step + rScreen * 0.22 + rScreen;
     ctx.save();
     ctx.translate(baseScreenX, baseScreenY - rScreen * 0.22);
-    ctx.rotate(swayAngle);
+    ctx.rotate(columnAngle);
     ctx.fillStyle = `rgba(20, 12, 34, ${CONFIG.STACK_CAPSULE_ALPHA})`;
     ctx.beginPath();
     const radius = Math.min(capsuleWidth * 0.5, capsuleHeight * 0.3);
@@ -156,27 +204,10 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   const sorted = [...tw.members].sort((a, b) => a.stackIdx - b.stackIdx);
   for (const o of sorted) {
     const stackIdx = o.stackIdx;
-    if (o.state === 'toppling') {
-      // Legacy rigid-rotation branch (still active until Part B replaces it).
-      const s = Math.sin(toppleAngle);
-      const c = Math.cos(toppleAngle);
-      const h = (stackIdx + 0.5) * unitHeightScreen;
-      const dirX = topple ? topple.dirX : 1;
-      const dirY = topple ? topple.dirY : 0;
-      const spacingScale = topple ? topple.scale : 1;
-      const worldHoriz = (stackIdx + 0.5) * 2 * tw.unitR * spacingScale * s;
-      const worldX = tw.baseX + dirX * worldHoriz;
-      const worldY = tw.baseY + dirY * worldHoriz;
-      const sx = worldX * t.scale + t.tx;
-      const sy = worldY * t.scaleY + t.ty - h * c;
-      drawEmoji(ctx, o.e, sx, sy, rScreen, (o.rot || 0), dpr);
-      continue;
-    }
-
     // 'idle' or 'stacked': upright at the pivot, lifted by column position,
-    // with per-unit jitter + perspective + sway rotation about the base.
+    // with per-unit jitter + perspective + column-wide rotation.
     const rowFromBase = stackIdx - baseStackIdx;
-    const p = stackIdx - effectiveBase; // takes into account slump progress
+    const p = stackIdx - effectiveBase;
     const lift = p * step;
 
     // Deterministic per-unit jitter (never changes frame-to-frame).
@@ -190,9 +221,10 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
     );
     const rDraw = rScreen * (1 + persp);
 
-    // Position: local (jx, -lift) around the base, rotated by sway.
-    const cosS = Math.cos(swayAngle);
-    const sinS = Math.sin(swayAngle);
+    // Position: local (jx, -lift) around the base, rotated by column angle
+    // (sway + pre-lean).
+    const cosS = Math.cos(columnAngle);
+    const sinS = Math.sin(columnAngle);
     const lx = jx;
     const ly = -lift - rScreen * 0.22;
     const sx = baseScreenX + lx * cosS - ly * sinS;
@@ -200,6 +232,6 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
 
     const unitTilt = unitLean(baseTilt, rowFromBase);
     const leanRot = unitTilt * leanSign;
-    drawEmoji(ctx, o.e, sx, sy, rDraw, (o.rot || 0) + leanRot + jrot + swayAngle, dpr);
+    drawEmoji(ctx, o.e, sx, sy, rDraw, (o.rot || 0) + leanRot + jrot + columnAngle, dpr);
   }
 }
