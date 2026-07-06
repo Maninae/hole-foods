@@ -288,3 +288,55 @@ test('currentBaseOf returns the lowest-stackIdx alive unit', () => {
   const base = currentBaseOf(list);
   assert.equal(base.stackIdx, 2);
 });
+
+// --- S1: landing-line length must stay inside PAD ------------------------
+
+test('topple: max-height max-slot tower lands inside 2× chunkSize of the base', () => {
+  // Fabricate a beacon-scale tower: max height, big unitR (a slot-5 base
+  // r=22 × SLOT_MULTS[5]=8.95 ≈ 197, times a tiny +8% jitter). Level-0
+  // chunks are CONFIG.CHUNK wide (480). Uncompressed, the landing line
+  // would run (2H−1)×unitR ≈ 9000+ world units — far outside PAD=3 chunks.
+  // The fix caps the line at 2 × chunkSizeAt(level), so every landed unit
+  // (and forEachObjectNear queried at the line's far end) sits inside the
+  // padded query window of the base's chunk.
+  const H = 24;
+  const unitR = 200;
+  const objects = [];
+  for (let k = 0; k < H; k++) {
+    objects.push(makeStackUnit('BEACON', k, 0, 0, unitR, k === 0 ? 'idle' : 'stacked'));
+  }
+  const world = createWorld('s1');
+  world.chunks.set('0:0,0', { level: 0, cx: 0, cy: 0, band: 0, objects });
+  const hole = createHole();
+  // Pump the hole up so a beacon-scale base (r=200) is edible — this test
+  // is about landing math, not rim physics: a real player reaching a
+  // beacon this big has a hole even bigger.
+  hole.r = unitR * 2;
+  hole.potential = unitR * 2;
+  hole.level = 20;
+  const sw = createSwallow();
+  // Hole to the left of the base so the topple falls to +x.
+  hole.x = -1; hole.y = 0;
+  const chunkSize = CONFIG.CHUNK; // level 0
+  const cap = 2 * chunkSize;
+
+  const events = runSeconds(sw, world, hole, CONFIG.STACK_TOPPLE_TIME + 0.2);
+
+  // Every landed non-base unit is within cap of the pivot (0, 0).
+  const chunk = world.chunks.get('0:0,0');
+  const landed = chunk.objects.filter((o) => o.stackIdx > 0);
+  assert.ok(landed.length > 0, 'expected some landed units');
+  for (const o of landed) {
+    const d = Math.hypot(o.x, o.y);
+    assert.ok(d <= cap + 1e-6,
+      `landed unit at (${o.x.toFixed(0)}, ${o.y.toFixed(0)}) — dist ${d.toFixed(0)} exceeds cap ${cap}`);
+  }
+
+  // The line's far end must still be reachable by forEachObjectNear.
+  const farthest = landed.reduce((a, b) => (Math.hypot(a.x, a.y) > Math.hypot(b.x, b.y) ? a : b));
+  let seen = 0;
+  forEachObjectNear(world, farthest.x, farthest.y, unitR * 1.5, (o) => {
+    if (o.stackIdx > 0) seen++;
+  });
+  assert.ok(seen >= 1, `forEachObjectNear at the line's far end returned no landed units`);
+});

@@ -3,7 +3,7 @@
 // presentation layer (sfx / particles / HUD) — pure module, no DOM.
 
 import { CONFIG } from './config.js';
-import { forEachObjectNear, markEaten } from './world.js';
+import { forEachObjectNear, markEaten, chunkSizeAt } from './world.js';
 import { eat } from './hole.js';
 import {
   aliveInStack, normalizeBases, landedPosition,
@@ -182,19 +182,35 @@ function startTopple(sw, world, hole, base) {
   }
   // Move all currently-stacked units of this tower into 'toppling'; rim
   // physics ignores them mid-rotation. The base stays 'falling' (already).
+  // Also find the tower's max alive stackIdx — the tip of the column and
+  // therefore the far end of the landing line.
+  let maxIdx = 0;
   for (const chunk of world.chunks.values()) {
     for (const o of chunk.objects) {
-      if (o.stackId === base.stackId && o.state === 'stacked') {
-        o.state = 'toppling';
-      }
+      if (o.stackId !== base.stackId) continue;
+      if (o.state === 'stacked') o.state = 'toppling';
+      if (o.stackIdx > maxIdx) maxIdx = o.stackIdx;
     }
   }
+  // Compress the landing line so it fits inside the base chunk's padded
+  // query window. landedPosition places unit k at (k+0.5)·2·unitR from the
+  // pivot, so uncompressed the line reaches (2·maxIdx+1)·unitR — for a
+  // deep-cycle beacon this is many chunks past PAD, hiding landed loot
+  // from every spatial query. Cap the line at 2·chunkSize (safely inside
+  // PAD=3) by scaling the per-unit spacing; the emoji sizes are untouched
+  // so the units read as dense fallen dominoes at the extreme end.
+  const level = parseInt(base.ck.split(':')[0], 10);
+  const chunkSize = chunkSizeAt(level);
+  const idealMaxDist = (2 * maxIdx + 1) * base.r;
+  const cap = 2 * chunkSize;
+  const scale = idealMaxDist > cap ? cap / idealMaxDist : 1;
   sw.topples.push({
     stackId: base.stackId,
     ck: base.ck,
     baseX: base.x, baseY: base.y,
     dirX, dirY,
     unitR: base.r,
+    scale, // <1 compresses the landing line to fit inside the chunk's query pad
     t: 0,
     duration: CONFIG.STACK_TOPPLE_TIME,
   });
@@ -230,7 +246,12 @@ function updateTopples(sw, dt, world, events) {
       if (!set) { set = new Set(); world.eaten.set(tp.ck, set); }
       for (const o of chunk.objects) {
         if (o.stackId !== tp.stackId || o.state !== 'toppling') continue;
-        const p = landedPosition(tp.baseX, tp.baseY, o.stackIdx, tp.unitR, tp.dirX, tp.dirY);
+        // Apply the landing-line compression factor: same visual size for
+        // each unit, but they overlap along the fall line so the whole
+        // line stays inside the base chunk's padded query window.
+        const p = landedPosition(
+          tp.baseX, tp.baseY, o.stackIdx, tp.unitR * tp.scale, tp.dirX, tp.dirY,
+        );
         o.x = p.x;
         o.y = p.y;
         o.state = 'idle';
