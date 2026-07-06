@@ -141,20 +141,37 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   const aliveHeight = Math.max(1, topStackIdx - baseStackIdx + 1);
   const effectiveBase = baseStackIdx;
 
-  // Pre-lean angle: during an avalanche's Jenga beat, the whole column
-  // tilts smoothly from 0 to STACK_AVAL_PRELEAN_DEG in the spread direction.
-  // After the pre-lean, still-stacked units keep the lean (visible on the
-  // top of a mid-detach column).
+  // Collapse animation: the column keeps deforming for the full
+  // STACK_AVAL_COLLAPSE_ANIM_TIME window (matches FALL_TIME so the sag
+  // completes right as the base finalizes into the pit). Two axes:
+  //   Lean grows from 0 to STACK_AVAL_COLLAPSE_LEAN_DEG over the window,
+  //   with an early ease to STACK_AVAL_PRELEAN_DEG at PRELEAN_TIME so
+  //   the Jenga "losing balance" read still lands crisp.
+  //   Sink lifts the column downward (in screen-y) proportional to a
+  //   fraction of a unit's height, matching the base's descent — the
+  //   column follows its base into the pit instead of standing rigid.
+  // Without this, still-stacked members froze at the PRELEAN pose from
+  // t=0.15 onward while the base was being swallowed. Owner playtest.
   let preLeanAngle = 0;
   let preLeanSign = 0;
+  let collapseSinkPx = 0;
   if (av && av.preLeanUntil > 0) {
-    const k = Math.min(1, av.t / av.preLeanUntil);
-    preLeanAngle = CONFIG.STACK_AVAL_PRELEAN_DEG * DEG * k;
+    const k = Math.min(1, av.t / CONFIG.STACK_AVAL_COLLAPSE_ANIM_TIME);
+    // Piecewise ease: linear to PRELEAN_DEG over PRELEAN_TIME, then
+    // continue growing to COLLAPSE_LEAN_DEG over the rest of the window.
+    const kBeat = Math.min(1, av.t / av.preLeanUntil);
+    const preDeg = CONFIG.STACK_AVAL_PRELEAN_DEG * kBeat;
+    const beatFrac = av.preLeanUntil / CONFIG.STACK_AVAL_COLLAPSE_ANIM_TIME;
+    const post = Math.max(0, (k - beatFrac) / (1 - beatFrac));
+    const postDeg = (CONFIG.STACK_AVAL_COLLAPSE_LEAN_DEG
+                     - CONFIG.STACK_AVAL_PRELEAN_DEG) * post;
+    preLeanAngle = (preDeg + postDeg) * DEG;
     // Sign follows the ON-SCREEN x-projection of the fall direction: an
     // east-west tip leans full, a pure north/south tip does not lean on
     // the screen-horizontal axis (its projection is nearly zero). Using
     // just sign(dirX) would make a pure-north tip lean right by mistake.
     preLeanSign = av.dirX;
+    collapseSinkPx = k * CONFIG.STACK_AVAL_COLLAPSE_SINK_FRAC * unitHeightScreen;
   }
 
   // Idle sway: the column pivots as one body around its base. Amplitude
@@ -235,7 +252,10 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
     const lx = jx;
     const ly = -lift - rScreen * 0.22;
     const sx = baseScreenX + lx * cosCol - ly * sinCol;
-    const sy = baseScreenY + lx * sinCol + ly * cosCol;
+    // Sink the column with the base's descent into the pit (avalanche only,
+    // 0 otherwise). Applied in screen space post-rotation so the tilt pivot
+    // stays at the ground plane.
+    const sy = baseScreenY + collapseSinkPx + lx * sinCol + ly * cosCol;
 
     const unitTilt = unitLean(baseTilt, rowFromBase);
     const leanRot = unitTilt * leanSign;

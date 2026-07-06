@@ -94,7 +94,15 @@ export const CONFIG = {
   // positions (seeded per unit) let the landing-cap contract stay testable.
   STACK_AVAL_STAGGER: 0.045,       // seconds between successive unit detaches (bottom-up)
   STACK_AVAL_PRELEAN_TIME: 0.15,   // Jenga "losing balance" beat before first detach (tall columns only)
-  STACK_AVAL_PRELEAN_DEG: 10,      // pre-lean angle (degrees) — enough to read, not enough to launch
+  STACK_AVAL_PRELEAN_DEG: 10,      // pre-lean angle (degrees) at t = PRELEAN_TIME (the Jenga read)
+  STACK_AVAL_COLLAPSE_ANIM_TIME: 0.5,  // total anim window the column sags + sinks WITH the falling base.
+                                       // Matches FALL_TIME so the column reaches its final crumble
+                                       // pose right as the base finalizes into the pit. Without this,
+                                       // still-stacked members froze at the 10-deg mark from t=0.15
+                                       // onward and read as motionless while the base was swallowed.
+  STACK_AVAL_COLLAPSE_LEAN_DEG: 25,    // final lean angle at anim end (grows past PRELEAN_DEG)
+  STACK_AVAL_COLLAPSE_SINK_FRAC: 0.45, // fraction of a unit's screen height the column sinks by
+                                       // anim end, matching the base's descent into the pit
   STACK_AVAL_GRAVITY: 2400,        // z-gravity in world-units / s². Lower than earth-ish so
                                    // the airborne phase reads (bounces last long enough to see).
   STACK_AVAL_LAUNCH_VZ: 240,       // initial upward velocity of a detaching unit (world-units / s).
