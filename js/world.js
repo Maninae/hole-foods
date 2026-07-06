@@ -10,7 +10,7 @@ import {
   bandIndex, themeAt, cycleForBand, sizeMultForBand, pointsFor, stackable,
 } from './catalog.js';
 import { PATTERN_KEYS, layoutCluster } from './patterns.js';
-import { normalizeBases } from './stacks.js';
+import { normalizeBases, spawnStackFromBase } from './stacks.js';
 
 // Cluster extents stay under ~2x a chunk side at every level (spacing scales
 // with item size, item size scales with the level) — 3 chunks of padding
@@ -125,31 +125,14 @@ function generateChunk(world, level, cx, cy) {
 
   // Place a tower: N identical units at one ground position, only the base
   // interactive. Consumes 1 idx if the base is rejected, or H idxs on
-  // success (base + H-1 stacked siblings). Siblings share the base's
-  // (x, y, r) and inherit its emoji — the whole strip reads as one thing.
+  // success (base + H-1 stacked siblings). Sibling geometry lives in
+  // stacks.spawnStackFromBase — this closure only handles the placement
+  // attempt and idx bookkeeping.
   const tryPlaceStack = (item, x, y, height) => {
     const base = placeObject(chunk, rng, item, mult, x, y, idx);
     idx++;
     if (!base) return; // rejected — only the base's idx is consumed
-    const ck = base.ck;
-    const stackId = `${ck}:s${base.idx}`;
-    base.stackId = stackId;
-    base.stackIdx = 0;
-    chunk.objects.push(base);
-    for (let k = 1; k < height; k++) {
-      chunk.objects.push({
-        id: `${ck}:${idx}`,
-        idx,
-        ck,
-        x: base.x, y: base.y, r: base.r,
-        e: base.e, hue: base.hue, up: base.up, rot: base.rot,
-        points: base.points,
-        state: 'stacked',
-        vx: 0, vy: 0,
-        stackId, stackIdx: k,
-      });
-      idx++;
-    }
+    idx = spawnStackFromBase(chunk, base, idx, height);
   };
 
   // Region-scale oasis roll: 3x3 chunks share a fate, so richness comes in

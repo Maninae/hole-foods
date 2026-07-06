@@ -99,3 +99,32 @@ export function landedPosition(baseX, baseY, stackIdx, unitR, dirX, dirY) {
   const dist = (stackIdx + 0.5) * 2 * unitR;
   return { x: baseX + dirX * dist, y: baseY + dirY * dist };
 }
+
+// Turn a successfully-placed base into a full tower: mint N-1 sibling
+// units at the base's (x, y, r), all state='stacked' with contiguous
+// stackIdx. Returns the next free idx after consuming H-1 more (base's
+// idx was already consumed by placeObject). Placement determinism is
+// preserved: same (seed, chunk) → same base attempt → same siblings.
+export function spawnStackFromBase(chunk, base, startIdx, height) {
+  const ck = base.ck;
+  const stackId = `${ck}:s${base.idx}`;
+  base.stackId = stackId;
+  base.stackIdx = 0;
+  chunk.objects.push(base);
+  let idx = startIdx;
+  for (let k = 1; k < height; k++) {
+    chunk.objects.push({
+      id: `${ck}:${idx}`,
+      idx,
+      ck,
+      x: base.x, y: base.y, r: base.r,
+      e: base.e, hue: base.hue, up: base.up, rot: base.rot,
+      points: base.points,
+      state: 'stacked',
+      vx: 0, vy: 0,
+      stackId, stackIdx: k,
+    });
+    idx++;
+  }
+  return idx;
+}
