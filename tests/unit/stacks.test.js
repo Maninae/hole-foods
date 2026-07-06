@@ -428,6 +428,91 @@ test('avalanche: no per-frame teleport at settle — displacement stays under 0.
   }
 });
 
+test('avalanche: no snap even at large-unit towers (physics scales with unitR)', () => {
+  // Cycle 2 slot 3 has unitR around 3000. With fixed vz/gravity the top
+  // unit's flight time exceeds MAX_FLIGHT by a wide margin, so the
+  // epsilon slide fires with a large miss (visible teleport). Physics
+  // constants must scale with unitR so flight time stays under the
+  // hard cap regardless of cycle or slot.
+  const H = 24;
+  const R = 3000;
+  const objects = [];
+  for (let k = 0; k < H; k++) {
+    objects.push(makeStackUnit('BIG', k, 0, 0, R, k === 0 ? 'idle' : 'stacked'));
+  }
+  const world = createWorld('stack-scale-test');
+  world.chunks.set('0:0,0', { level: 0, cx: 0, cy: 0, band: 0, objects });
+  const hole = createHole();
+  hole.r = 400; hole.potential = 400; hole.level = 20;
+  hole.x = -10; hole.y = 0;
+  const sw = createSwallow();
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e7; hole.y = 1e7; // move hole away so rim doesn't re-eat units
+  const av = sw.avalanches[0];
+  const unitDiameter = 2 * R;
+  const teleThreshold = 0.5 * unitDiameter;
+  const prev = new Map();
+  for (const u of av.units.values()) prev.set(u.stackIdx, { x: u.x, y: u.y, worst: 0 });
+  const dt = 1 / 60;
+  const total = avalanchePlayoutSeconds(H);
+  const chunk = world.chunks.get('0:0,0');
+  for (let t = 1 / 60; t < total; t += dt) {
+    swallowUpdate(sw, dt, t, world, hole);
+    for (const [stackIdx, rec] of prev) {
+      let x; let y;
+      const u = av.units.get(stackIdx);
+      if (u && u.phase === 'tumbling') { x = u.x; y = u.y; }
+      else {
+        const o = chunk.objects.find((c) => c.stackIdx === stackIdx);
+        if (!o) continue;
+        x = o.x; y = o.y;
+      }
+      const d = Math.hypot(x - rec.x, y - rec.y);
+      if (d > rec.worst) rec.worst = d;
+      rec.x = x; rec.y = y;
+    }
+  }
+  const bad = [...prev.entries()].filter(([, r]) => r.worst > teleThreshold);
+  if (bad.length) {
+    const details = bad.map(([k, r]) => `idx${k}=${r.worst.toFixed(0)}`).join(', ');
+    assert.fail(`large-unit tower teleport > ${teleThreshold} at idxs: ${details}`);
+  }
+});
+
+test('avalanche: mid-air flight headings span multiple quadrants around the base', () => {
+  // With arrival velocities aimed at each unit's radial spiral target,
+  // flight headings should scatter around the base, not all point in the
+  // shared spread direction. Guard against a regression to a single-cone
+  // launch.
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  const av = sw.avalanches[0];
+  // Advance a couple of ticks so every unit passes through detach and
+  // has a real (vx, vy) sampled.
+  runSeconds(sw, world, hole, 0.8, 1 / 60);
+  const quadrants = new Set();
+  for (const u of av.units.values()) {
+    // Snapshot vx/vy from the pre-settled tumbling window if still airborne,
+    // otherwise derive from the settled displacement (which is the ballistic
+    // arrival direction).
+    let dx; let dy;
+    if (u.phase === 'tumbling' && (u.vx || u.vy)) {
+      dx = u.vx; dy = u.vy;
+    } else {
+      dx = u.tx - av.baseX;
+      dy = u.ty - av.baseY;
+    }
+    if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) continue;
+    const q = (dx >= 0 ? 0 : 1) + (dy >= 0 ? 0 : 2); // 0..3 quadrant
+    quadrants.add(q);
+  }
+  assert.ok(quadrants.size >= 3,
+    `flight headings clustered in ${quadrants.size} quadrant(s); avalanche looks one-directional`);
+});
+
 test('avalanche: settled sprite rotations vary across the full circle', () => {
   const H = 14;
   const { world, hole, sw } = makeStackFixture(H);
