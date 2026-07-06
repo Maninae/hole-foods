@@ -446,7 +446,13 @@ test('avalanche: max-height max-slot tower lands inside 2× chunkSize of the bas
   const chunkSize = CONFIG.CHUNK; // level 0
   const cap = 2 * chunkSize;
 
-  const events = runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
+  // One tick: base tips + avalanche kicks off + all non-base units go
+  // into the tumbling bookkeeping with deterministic targets. Then move
+  // the hole far away so rim physics doesn't consume the landed mound
+  // during playout — the test is about landing math, not eatability.
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H), 1 / 60);
 
   // Every landed non-base unit is within cap of the pivot (0, 0).
   const chunk = world.chunks.get('0:0,0');

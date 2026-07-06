@@ -94,9 +94,10 @@ export const CONFIG = {
   STACK_AVAL_STAGGER: 0.045,       // seconds between successive unit detaches (bottom-up)
   STACK_AVAL_PRELEAN_TIME: 0.15,   // Jenga "losing balance" beat before first detach (tall columns only)
   STACK_AVAL_PRELEAN_DEG: 10,      // pre-lean angle (degrees) — enough to read, not enough to launch
-  STACK_AVAL_GRAVITY: 3200,        // z-gravity in world-units / s²
-  STACK_AVAL_LAUNCH_VZ: 180,       // initial upward velocity of a detaching unit (world-units / s)
-  STACK_AVAL_LAUNCH_VZ_PER_IDX: 40, // extra initial vz per idx up the column (top launches farther)
+  STACK_AVAL_GRAVITY: 2400,        // z-gravity in world-units / s². Lower than earth-ish so
+                                   // the airborne phase reads (bounces last long enough to see).
+  STACK_AVAL_LAUNCH_VZ: 240,       // initial upward velocity of a detaching unit (world-units / s)
+  STACK_AVAL_LAUNCH_VZ_PER_IDX: 60, // extra initial vz per idx up the column (top launches farther)
   STACK_AVAL_CONE_DEG: 35,         // half-angle of the horizontal spread cone away from the hole
   STACK_AVAL_HSPEED_BASE: 90,      // base horizontal speed on detach
   STACK_AVAL_HSPEED_PER_IDX: 55,   // extra horizontal speed per idx (higher units fling farther)
@@ -110,7 +111,7 @@ export const CONFIG = {
   STACK_AVAL_MAX_FLIGHT: 3.5,      // seconds — hard cap on airborne time so a stuck unit can't lock
   STACK_AVAL_DUST_INTERVAL: 0.06,  // min seconds between dust puffs during an avalanche (throttle)
   STACK_AVAL_THUMP_INTERVAL: 0.11, // min seconds between thump sfx during an avalanche (throttle)
-  STACK_AVAL_MOUND_SPREAD: 0.9,    // tall-tower mound spread, fraction of the 2×chunkSize landing cap
+  STACK_AVAL_MOUND_SPREAD: 0.45,   // tall-tower mound spread, fraction of the 2×chunkSize landing cap
                                    // (a tall tower's units settle across ~90% of the cap radius, chaotically)
   STACK_AVAL_SLUMP_RADIUS_MULT: 0.15, // short-pile slump target radius as fraction of unitR × height
                                      // — small so units mostly hop into the hole, feeding the combo chain

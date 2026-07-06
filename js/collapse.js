@@ -142,14 +142,21 @@ export function initiateCollapse(sw, world, hole, base) {
                naturalMax * CONFIG.STACK_AVAL_SLUMP_RADIUS_MULT);
   const coneRad = CONFIG.STACK_AVAL_CONE_DEG * DEG;
 
+  // Target distribution: cluster around a mound CENTER (fraction of the
+  // targetRadius out from the base) with a smaller ± jitter, plus a wide
+  // cone angle. Higher units still tend farther but not so much that the
+  // mound reads as a line — the visual reference is a tight pile, not a
+  // fan. Every position stays inside targetRadius (S1 cap invariant).
   for (const u of units.values()) {
-    // Radial distance grows with stackIdx (higher units fling farther), with
-    // small ± jitter so the mound isn't a neat radial spiral.
-    const distFrac = (u.stackIdx + 1) / (maxIdx + 1);
-    const distJitter = 0.15 * hash01(base.stackId, u.stackIdx, 0xa5a5);
-    const dist = Math.max(0.05 * base.r,
-      Math.min(targetRadius, targetRadius * (distFrac + distJitter)));
-    // Cone angle around the spread direction
+    const stackFrac = (u.stackIdx + 0.5) / (maxIdx + 1);
+    // Center distance around 0.55 of targetRadius, biased by stackFrac.
+    const distCenter = targetRadius * (0.35 + 0.40 * stackFrac);
+    const distJitter = 0.22 * targetRadius
+      * hash01(base.stackId, u.stackIdx, 0xa5a5);
+    const dist = Math.max(base.r * 0.4,
+      Math.min(targetRadius, distCenter + distJitter));
+    // Cone angle: wide enough (±35° default) that the mound has visible
+    // y-spread and doesn't read as a rigid line.
     const angle = coneRad * hash01(base.stackId, u.stackIdx, 0xd0d0);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);

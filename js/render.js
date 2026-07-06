@@ -232,6 +232,10 @@ export function renderScene(R, state) {
   // bases can also tease if their base radius sits in the fit window.
   const fitLimit = hole.r * CONFIG.FIT_FACTOR;
   for (const item of visible) {
+    // Airborne (tumbling) units don't get a tease ring — they're already
+    // committed to the mound; rendering a "just barely too big" flourish
+    // over a body in flight reads as noise.
+    if (item.type === 'tumbling') continue;
     const o = item.type === 'single' ? item.obj : null;
     const twBase = item.type === 'tower'
       ? { x: item.tower.baseX, y: item.tower.baseY, r: item.tower.unitR }
