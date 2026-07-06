@@ -208,17 +208,29 @@ test('avalanche: tall stacks (≥ TOPPLE_MIN alive) collapse into landed idles',
   }
 });
 
-test('avalanche: landed units fall away from the hole (mound cone)', () => {
+test('avalanche: mound is biased away from the hole (radial heap, not a fan)', () => {
   const H = Math.max(CONFIG.STACK_TOPPLE_MIN, 10);
   const { world, hole, sw } = makeStackFixture(H);
-  // Hole to the LEFT. Mound extends to the RIGHT — every landed unit's x > 0.
+  // Hole to the LEFT. Mound is a haphazard radial heap: most units end
+  // up on the +x side (away from the hole), but a fraction spill
+  // sideways or behind (the "haphazard pyramid" the owner asked for).
   hole.x = -10; hole.y = 0;
-  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
+  // One tick kicks the avalanche off; move the hole away so rim physics
+  // doesn't consume the mound during playout.
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H), 1 / 60);
   const chunk = world.chunks.get('0:0,0');
   const landed = chunk.objects.filter((o) => o.stackIdx > 0);
-  for (const o of landed) {
-    assert.ok(o.x > 0.5, `landed unit should have moved right (away from hole), got x=${o.x}`);
-  }
+  assert.ok(landed.length > 0, 'expected landed units');
+  // Majority forward (+x): at least 55% of units land with x > 0.
+  const forwardCount = landed.filter((o) => o.x > 0).length;
+  const forwardFrac = forwardCount / landed.length;
+  assert.ok(forwardFrac >= 0.55,
+    `expected majority-forward mound, got ${forwardCount}/${landed.length} (${(forwardFrac * 100).toFixed(0)}%)`);
+  // Centroid is on the forward side too.
+  const cx = landed.reduce((s, o) => s + o.x, 0) / landed.length;
+  assert.ok(cx > 0, `mound centroid should be on the away side, got x=${cx.toFixed(2)}`);
 });
 
 test('avalanche: detaches are bottom-up with monotonic stagger', () => {
@@ -266,17 +278,46 @@ test('avalanche: final resting positions spread as a mound, not a straight line'
   const H = 14;
   const { world, hole, sw } = makeStackFixture(H);
   hole.x = -10; hole.y = 0;
-  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H));
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H), 1 / 60);
   const chunk = world.chunks.get('0:0,0');
   const landed = chunk.objects.filter((o) => o.stackIdx > 0);
   assert.ok(landed.length >= 5, `need enough units to test mound spread, got ${landed.length}`);
-  // A rigid-line topple would put every unit at y=0. A mound spreads in y
-  // too (the cone widens the fall direction). Require some y-variance.
+  // A rigid-line topple would put every unit at y=0. A radial heap has
+  // real y-spread (both sides of the fall direction populated).
   const ys = landed.map((o) => o.y);
   const ymin = Math.min(...ys);
   const ymax = Math.max(...ys);
   assert.ok(ymax - ymin > 2,
     `expected chaotic y-spread, got range ${(ymax - ymin).toFixed(2)}`);
+  // Distances from base cover a range too (density near base, some units
+  // farther): the max distance should be at least 3x the min distance.
+  const dists = landed.map((o) => Math.hypot(o.x, o.y));
+  const dmin = Math.min(...dists);
+  const dmax = Math.max(...dists);
+  assert.ok(dmax >= dmin * 3 || dmax - dmin > 4 * 10 /* unitR */,
+    `expected spread of distances, got min=${dmin.toFixed(2)} max=${dmax.toFixed(2)}`);
+});
+
+test('avalanche: settled sprite rotations vary across the full circle', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  runSeconds(sw, world, hole, avalanchePlayoutSeconds(H), 1 / 60);
+  const chunk = world.chunks.get('0:0,0');
+  const landed = chunk.objects.filter((o) => o.stackIdx > 0);
+  assert.ok(landed.length >= 5, 'need enough units to test rotation variety');
+  const rots = landed.map((o) => o.rot);
+  const rmin = Math.min(...rots);
+  const rmax = Math.max(...rots);
+  // A tight physics-driven spin correlates with flight time (all similar).
+  // With deterministic final-rot per unit, the range should span most of
+  // ±π so lying sprites face every angle.
+  assert.ok(rmax - rmin > Math.PI,
+    `expected settled rotations to span >π, got range ${(rmax - rmin).toFixed(2)}`);
 });
 
 test('avalanche: settles within a bounded sim time — no unit stuck airborne', () => {

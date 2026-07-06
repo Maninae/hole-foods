@@ -37,17 +37,25 @@ import { aliveInStack } from './stacks.js';
 
 const DEG = Math.PI / 180;
 
-// Deterministic FNV-1a-ish hash → float in [-1, 1]. Same shape as
-// render-sprites.js's hash01 — different salts give independent streams
-// for angle, distance, spin, cone jitter, launch vz.
+// Deterministic hash to a float in [-1, 1]. FNV-1a across stackId chars,
+// then a Murmur3-flavored finalizer over the (stackId-hash, stackIdx, salt)
+// tuple so consecutive stackIdx values map to WIDELY different outputs.
+// (An earlier finalizer here left biasRoll and angle nearly monotonic
+// across idx, giving the settle mound two visible rows.) Different salts
+// give independent streams for angle, distance, spin, launch vz.
 function hash01(stackId, stackIdx, salt) {
-  let h = 2166136261 ^ salt;
+  let h = 2166136261;
   for (let i = 0; i < stackId.length; i++) {
     h ^= stackId.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  h ^= stackIdx + 0x9e3779b9;
-  h = Math.imul(h ^ (h >>> 13), 16777619);
+  h ^= Math.imul(stackIdx + 1, 0x9e3779b1);
+  h ^= Math.imul(salt | 0, 0x85ebca6b);
+  // Murmur3 finalizer: full 32-bit avalanche.
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
   h ^= h >>> 16;
   return ((h >>> 0) / 4294967296) * 2 - 1;
 }
@@ -130,40 +138,64 @@ export function initiateCollapse(sw, world, hole, base) {
   }
 
   // Deterministic final targets. Natural mound extent scales with tower
-  // size (unit-radius × height), clamped to the cap × mound-spread. A
-  // short-pile slump uses a much tighter radius so units mostly hop IN
-  // PLACE — the tower crumbles into the hole one unit at a time and the
-  // rim physics eats them normally, feeding the combo chain (the whole
-  // point of a slump).
+  // size (unit-radius times height), clamped to the cap times mound-spread.
+  // A short-pile slump uses a much tighter radius so units mostly hop IN
+  // PLACE (the tower crumbles into the hole one unit at a time and rim
+  // physics eats them normally, feeding the combo chain).
   const naturalMax = 2 * base.r * (maxIdx + 1);
   const targetRadius = isTall
     ? Math.min(cap * CONFIG.STACK_AVAL_MOUND_SPREAD, naturalMax)
     : Math.min(cap * CONFIG.STACK_AVAL_MOUND_SPREAD * 0.35,
                naturalMax * CONFIG.STACK_AVAL_SLUMP_RADIUS_MULT);
-  const coneRad = CONFIG.STACK_AVAL_CONE_DEG * DEG;
 
-  // Target distribution: cluster around a mound CENTER (fraction of the
-  // targetRadius out from the base) with a smaller ± jitter, plus a wide
-  // cone angle. Higher units still tend farther but not so much that the
-  // mound reads as a line — the visual reference is a tight pile, not a
-  // fan. Every position stays inside targetRadius (S1 cap invariant).
+  // Target distribution: a HAPHAZARD RADIAL HEAP around the base, like a
+  // real toppled pyramid. Not a fan.
+  //   Angle: ~60% of units land in the "forward" half (±90° from dir),
+  //     the remaining ~40% can spill anywhere including sideways or a
+  //     little behind. Owner asked for radial-with-bias, not a cone.
+  //   Distance: density is HIGH near the base, thinning outward. Low
+  //     stackIdx units barely move; high stackIdx (top of column) units
+  //     fling far. Distances are stackFrac-weighted with a power-skewed
+  //     tail so a few units land near the cap and the rest cluster in.
+  //   Rotation: full-circle random per unit (hashed), applied on settle
+  //     so lying-down sprites face every angle (croissants sprawled).
+  // Every target stays within targetRadius (S1 cap invariant).
+  const FORWARD_HALF = Math.PI / 2;      // ±90° from dir
+  const WIDE_HALF = Math.PI;             // ±180° (anywhere)
+  const FORWARD_BIAS_FRAC = 0.60;        // 60% forward, 40% radial
   for (const u of units.values()) {
     const stackFrac = (u.stackIdx + 0.5) / (maxIdx + 1);
-    // Center distance around 0.55 of targetRadius, biased by stackFrac.
-    const distCenter = targetRadius * (0.35 + 0.40 * stackFrac);
-    const distJitter = 0.22 * targetRadius
-      * hash01(base.stackId, u.stackIdx, 0xa5a5);
-    const dist = Math.max(base.r * 0.4,
-      Math.min(targetRadius, distCenter + distJitter));
-    // Cone angle: wide enough (±35° default) that the mound has visible
-    // y-spread and doesn't read as a rigid line.
-    const angle = coneRad * hash01(base.stackId, u.stackIdx, 0xd0d0);
+
+    // Angle: pick forward-biased vs. wide-radial per unit.
+    const biasRoll = (hash01(base.stackId, u.stackIdx, 0xb2b2) + 1) / 2; // [0,1]
+    const angleFrac = hash01(base.stackId, u.stackIdx, 0xd0d0);        // [-1,1]
+    const forward = biasRoll < FORWARD_BIAS_FRAC;
+    const halfSpan = forward ? FORWARD_HALF : WIDE_HALF;
+    const angle = angleFrac * halfSpan;
+
+    // Distance: center rises with stackFrac (power 0.7 so it climbs
+    // fast for low idxs then plateaus), scatter grows with sqrt(stackFrac)
+    // so higher units have a heavier tail. Cubic skew concentrates most
+    // jitter samples near zero with rare far-flingers.
+    const centerFrac = 0.08 + 0.55 * Math.pow(stackFrac, 0.7);
+    const skewH = hash01(base.stackId, u.stackIdx, 0xa5a5);
+    const skew = Math.sign(skewH) * Math.pow(Math.abs(skewH), 2.4);
+    const jitterFrac = 0.45 * Math.sqrt(stackFrac) * skew;
+    const distFrac = Math.max(0, centerFrac + jitterFrac);
+    const dist = Math.min(targetRadius, distFrac * targetRadius);
+
+    // Compose direction (base dir rotated by angle).
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     const rx = dirX * cos - dirY * sin;
     const ry = dirX * sin + dirY * cos;
     u.tx = base.x + rx * dist;
     u.ty = base.y + ry * dist;
+
+    // Final resting rotation: random full-circle. Applied at settle so a
+    // lying croissant/emoji faces any angle, not the one accumulated by
+    // physics spin (which correlates with flight time).
+    u.finalRot = hash01(base.stackId, u.stackIdx, 0xe5e5) * Math.PI * 2;
   }
 
   if (!sw.avalanches) sw.avalanches = [];
@@ -219,7 +251,9 @@ function stepUnit(av, u, dt) {
 
 function settleUnit(av, u) {
   // Snap the chunk object to the deterministic target and hand it back to
-  // the ordinary idle pool — rim physics eats it normally from here on.
+  // the ordinary idle pool (rim physics eats it normally from here).
+  // Snap rot to the deterministic finalRot so lying-down sprites face
+  // every angle instead of the physics-correlated spin.
   u.phase = 'settled';
   u.z = 0;
   u.x = u.tx;
@@ -231,6 +265,7 @@ function settleUnit(av, u) {
   o.state = 'idle';
   o.landed = true;
   o.tilt = 0;
+  o.rot = u.finalRot ?? o.rot;
   o.vx = 0; o.vy = 0;
 }
 
