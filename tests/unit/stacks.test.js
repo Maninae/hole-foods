@@ -354,6 +354,80 @@ test('avalanche: minimum pairwise distance between settled targets ≥ 1.0 × un
     `min pairwise separation ${minSep.toFixed(2)} < 1.0 × unit diameter ${unitDiameter} (idxs ${closestPair})`);
 });
 
+// --- Owner bug: flight must ARRIVE at the settle target ------------------
+// A prior model launched units with impulses independent of their target
+// and snapped x/y to the deterministic spiral target on settle. Owner
+// playtest surfaced two symptoms: "flings super far", then "teleports
+// back to my current location". Root cause is one thing: flight and
+// target are decoupled. The fix aims flight AT the target so there is
+// nothing to snap. These two tests are the guards.
+
+test('avalanche: max mid-flight distance stays within 1.2× the spiral max target radius', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  const av = sw.avalanches[0];
+  const targets = [...av.units.values()];
+  const maxTargetR = Math.max(
+    ...targets.map((u) => Math.hypot(u.tx - av.baseX, u.ty - av.baseY)),
+  );
+  let maxFlightR = 0;
+  const dt = 1 / 60;
+  const total = avalanchePlayoutSeconds(H);
+  for (let t = 1 / 60; t < total; t += dt) {
+    swallowUpdate(sw, dt, t, world, hole);
+    if (!av.units) continue;
+    for (const u of av.units.values()) {
+      if (u.phase !== 'tumbling') continue;
+      const d = Math.hypot(u.x - av.baseX, u.y - av.baseY);
+      if (d > maxFlightR) maxFlightR = d;
+    }
+  }
+  assert.ok(maxFlightR <= 1.2 * maxTargetR,
+    `mid-flight excursion ${maxFlightR.toFixed(1)} exceeds 1.2× max spiral target ${maxTargetR.toFixed(1)} — units are launching past where they'll settle`);
+});
+
+test('avalanche: no per-frame teleport at settle — displacement stays under 0.5× unit diameter', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  hole.x = 1e6; hole.y = 1e6;
+  const av = sw.avalanches[0];
+  const unitR = 10; // fixture
+  const threshold = 0.5 * 2 * unitR;
+  const chunk = world.chunks.get('0:0,0');
+  const byIdx = new Map();
+  for (const u of av.units.values()) {
+    byIdx.set(u.stackIdx, { prevX: u.x, prevY: u.y, worst: 0 });
+  }
+  const dt = 1 / 60;
+  const total = avalanchePlayoutSeconds(H);
+  for (let t = 1 / 60; t < total; t += dt) {
+    swallowUpdate(sw, dt, t, world, hole);
+    for (const [stackIdx, rec] of byIdx) {
+      let x; let y;
+      const u = av.units.get(stackIdx);
+      if (u && u.phase === 'tumbling') { x = u.x; y = u.y; }
+      else {
+        const o = chunk.objects.find((c) => c.stackIdx === stackIdx);
+        if (!o) continue;
+        x = o.x; y = o.y;
+      }
+      const d = Math.hypot(x - rec.prevX, y - rec.prevY);
+      if (d > rec.worst) rec.worst = d;
+      rec.prevX = x; rec.prevY = y;
+    }
+  }
+  const bad = [...byIdx.entries()].filter(([, r]) => r.worst > threshold);
+  if (bad.length) {
+    const details = bad.map(([k, r]) => `idx${k}=${r.worst.toFixed(1)}`).join(', ');
+    assert.fail(`per-frame ground displacement > ${threshold}: ${details} — settle is teleporting`);
+  }
+});
+
 test('avalanche: settled sprite rotations vary across the full circle', () => {
   const H = 14;
   const { world, hole, sw } = makeStackFixture(H);
