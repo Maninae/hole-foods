@@ -1,0 +1,101 @@
+// Vertical stacks ("towers"): N identical units of one item at the same
+// ground position, drawn as a vertical strip. Only the lowest alive unit is
+// interactive ('idle'); the rest sit in state='stacked' so spatial queries
+// skip them and the renderer treats them as belonging to a tower.
+//
+// This module owns the geometry helpers and small pure utilities. The
+// spawning logic lives in world.js (chunk generation); the collapse
+// state machine lives in swallow.js.
+//
+// Data model: every tower unit carries `stackId` (string, unique per chunk)
+// and `stackIdx` (0 = base, increases upward). Height is the max stackIdx
+// present at spawn; regeneration after eating filters via `world.eaten`, and
+// the lowest surviving stackIdx becomes the new base.
+
+import { CONFIG } from './config.js';
+
+// Group objects by stackId. Non-stack objects are dropped. Returns a Map
+// stackId -> list (unsorted). Callers sort by stackIdx if they need order.
+export function groupStacks(objects) {
+  const out = new Map();
+  for (const o of objects) {
+    if (!o.stackId) continue;
+    let list = out.get(o.stackId);
+    if (!list) { list = []; out.set(o.stackId, list); }
+    list.push(o);
+  }
+  return out;
+}
+
+// Alive units of a specific tower, spanning any chunk (idle + stacked +
+// toppling all count). Used by the collapse code to decide slump vs topple.
+export function aliveInStack(world, stackId) {
+  const out = [];
+  for (const chunk of world.chunks.values()) {
+    for (const o of chunk.objects) {
+      if (o.stackId === stackId) out.push(o);
+    }
+  }
+  return out;
+}
+
+// The current base of a tower: lowest-stackIdx alive unit. Callers guarantee
+// the list is non-empty.
+export function currentBaseOf(list) {
+  let base = list[0];
+  for (const o of list) {
+    if (o.stackIdx < base.stackIdx) base = o;
+  }
+  return base;
+}
+
+// After a chunk regenerates (or a slump animation completes) the lowest
+// surviving 'stacked' unit needs to become 'idle'; higher units stay
+// 'stacked'. Units mid-animation ('falling' base, 'toppling' siblings)
+// are untouched — they'll resolve on their own timeline.
+export function normalizeBases(objects) {
+  const groups = groupStacks(objects);
+  for (const list of groups.values()) {
+    const settled = list.filter(
+      (o) => o.state === 'idle' || o.state === 'stacked',
+    );
+    if (settled.length === 0) continue;
+    const base = currentBaseOf(settled);
+    for (const o of settled) {
+      o.state = o === base ? 'idle' : 'stacked';
+    }
+  }
+}
+
+// Lean applied to a stacked unit given the base's tilt — accumulates gently
+// up the column, so the top sways more than the bottom without diverging.
+export function unitLean(baseTilt, stackIdx) {
+  return baseTilt * (1 + CONFIG.STACK_LEAN_ACCUM * stackIdx);
+}
+
+// Landed position of a toppled unit at rotation `angle` (0 = upright,
+// PI/2 = fully fallen). Returned in world offsets from the base pivot,
+// plus a billboard-Y screen height factor (0..1 of the unit's diameter).
+export function toppleUnitTransform(stackIdx, unitDiameter, angle, dirX, dirY) {
+  // Center height above base at rest: (stackIdx + 0.5) * unitDiameter.
+  // Rotate around pivot at (0, 0, 0) about the horizontal axis perpendicular
+  // to (dirX, dirY): height compresses by cos, horizontal offset grows by sin.
+  const h = (stackIdx + 0.5) * unitDiameter;
+  const s = Math.sin(angle);
+  const c = Math.cos(angle);
+  const horiz = h * s;
+  const vertScreenFactor = c; // multiplied by unit diameter → billboard lift in world-height units
+  return {
+    dx: dirX * horiz,
+    dy: dirY * horiz,
+    heightFactor: vertScreenFactor,
+  };
+}
+
+// Final landed ground position for a unit at stackIdx k, given the base
+// pivot and the fall direction. The base itself was at (baseX, baseY);
+// unit k lands one diameter further along the fall direction per idx step.
+export function landedPosition(baseX, baseY, stackIdx, unitR, dirX, dirY) {
+  const dist = (stackIdx + 0.5) * 2 * unitR;
+  return { x: baseX + dirX * dist, y: baseY + dirY * dist };
+}

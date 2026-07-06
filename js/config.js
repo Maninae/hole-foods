@@ -49,4 +49,23 @@ export const CONFIG = {
   // Biome cycling ("objects level up as you explore")
   BANDS_PER_CYCLE: 6,
   CYCLE_SIZE_MULT: 6,     // object size multiplier per full biome cycle
+
+  // Vertical stacks ("towers"). A stackable item may spawn as N identical
+  // units at one ground position — only the base is interactive; the units
+  // above draw as a vertical strip. Eating the base slumps the tower down
+  // one unit; a tall enough tower (alive >= TOPPLE_MIN) topples over
+  // instead and its units land as ordinary ground items in a line.
+  STACK_OASIS_CHANCE: 0.5,      // per oasis chunk: probability at least one tower spawns
+  STACK_OASIS_MAX: 2,           // at most this many towers per oasis chunk
+  STACK_DESERT_BEACON_PROB: 0.02, // per desert chunk: probability of a lone beacon tower
+  STACK_HEIGHT_MIN: 6,          // shortest tower
+  STACK_HEIGHT_MAX: 14,         // typical tallest tower
+  STACK_BEACON_MIN: 12,         // desert beacons at least this tall
+  STACK_BEACON_MAX: 24,
+  STACK_UNIT_OVERLAP: 0.85,     // screen-Y offset between stacked units (fraction of unit height)
+  STACK_LEAN_ACCUM: 0.08,       // per-idx lean amplification up the column
+  STACK_SLUMP_TIME: 0.12,       // seconds for the column to drop one unit-height
+  STACK_TOPPLE_TIME: 0.5,       // seconds for a 90° topple (matches FALL_TIME)
+  STACK_TOPPLE_MIN: 8,          // alive units required for the tall-tower topple path
+  STACK_TOPPLE_FLOATER_CAP: 10, // temporarily raised score-floater cap during a collapse
 };

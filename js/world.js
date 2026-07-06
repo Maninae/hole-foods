@@ -7,9 +7,10 @@
 import { CONFIG } from './config.js';
 import { chunkRng } from './rng.js';
 import {
-  bandIndex, themeAt, cycleForBand, sizeMultForBand, pointsFor,
+  bandIndex, themeAt, cycleForBand, sizeMultForBand, pointsFor, stackable,
 } from './catalog.js';
 import { PATTERN_KEYS, layoutCluster } from './patterns.js';
+import { normalizeBases } from './stacks.js';
 
 // Cluster extents stay under ~2x a chunk side at every level (spacing scales
 // with item size, item size scales with the level) — 3 chunks of padding
@@ -122,6 +123,35 @@ function generateChunk(world, level, cx, cy) {
     if (o) chunk.objects.push(o);
   };
 
+  // Place a tower: N identical units at one ground position, only the base
+  // interactive. Consumes 1 idx if the base is rejected, or H idxs on
+  // success (base + H-1 stacked siblings). Siblings share the base's
+  // (x, y, r) and inherit its emoji — the whole strip reads as one thing.
+  const tryPlaceStack = (item, x, y, height) => {
+    const base = placeObject(chunk, rng, item, mult, x, y, idx);
+    idx++;
+    if (!base) return; // rejected — only the base's idx is consumed
+    const ck = base.ck;
+    const stackId = `${ck}:s${base.idx}`;
+    base.stackId = stackId;
+    base.stackIdx = 0;
+    chunk.objects.push(base);
+    for (let k = 1; k < height; k++) {
+      chunk.objects.push({
+        id: `${ck}:${idx}`,
+        idx,
+        ck,
+        x: base.x, y: base.y, r: base.r,
+        e: base.e, hue: base.hue, up: base.up, rot: base.rot,
+        points: base.points,
+        state: 'stacked',
+        vx: 0, vy: 0,
+        stackId, stackIdx: k,
+      });
+      idx++;
+    }
+  };
+
   // Region-scale oasis roll: 3x3 chunks share a fate, so richness comes in
   // patches you can find and clear — a lot of food, then a few crumbs
   // sparsely here and there before the next cluster. Rolled on a separate
@@ -160,6 +190,20 @@ function generateChunk(world, level, cx, cy) {
       const item = rng.pickWeighted(biome.items, (it) => it.w);
       tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
     }
+    // Towers: some oases stage 1..MAX vertical stacks as their centerpiece.
+    // Stackable items live in the r=7..22 band so the base is edible early;
+    // slot/cycle multipliers scale the whole tower for free at any depth.
+    const stackItems = biome.items.filter(stackable);
+    if (stackItems.length > 0 && rng.chance(CONFIG.STACK_OASIS_CHANCE)) {
+      const nTowers = rng.int(1, CONFIG.STACK_OASIS_MAX);
+      for (let ti = 0; ti < nTowers; ti++) {
+        const item = rng.pickWeighted(stackItems, (it) => it.w);
+        const height = rng.int(CONFIG.STACK_HEIGHT_MIN, CONFIG.STACK_HEIGHT_MAX);
+        const tx = x0 + rng.range(0.2, 0.8) * C;
+        const ty = y0 + rng.range(0.2, 0.8) * C;
+        tryPlaceStack(item, tx, ty, height);
+      }
+    }
   } else {
     // Desert: a scattering of crumbs from the biome's smallest few items,
     // with a rare full-table surprise to keep exploration interesting.
@@ -172,6 +216,18 @@ function generateChunk(world, level, cx, cy) {
     if (rng.next() < DESERT_SURPRISE_PROB) {
       const item = rng.pickWeighted(biome.items, (it) => it.w);
       tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
+    }
+    // Beacon: very rarely, a lone tall tower stands in the desert as a
+    // navigable landmark — silhouette visible across the sparse chunks.
+    if (rng.next() < CONFIG.STACK_DESERT_BEACON_PROB) {
+      const stackItems = biome.items.filter(stackable);
+      if (stackItems.length > 0) {
+        const item = rng.pickWeighted(stackItems, (it) => it.w);
+        const height = rng.int(CONFIG.STACK_BEACON_MIN, CONFIG.STACK_BEACON_MAX);
+        const tx = x0 + rng.range(0.15, 0.85) * C;
+        const ty = y0 + rng.range(0.15, 0.85) * C;
+        tryPlaceStack(item, tx, ty, height);
+      }
     }
   }
 
@@ -196,9 +252,12 @@ function generateChunk(world, level, cx, cy) {
     });
   }
 
-  // Apply persisted eaten set.
+  // Apply persisted eaten set, then promote the lowest surviving stack unit
+  // to 'idle' in each tower — partially-eaten towers rebuild with the right
+  // base after an unload/reload round-trip.
   const eatenSet = world.eaten.get(chunkKey(level, cx, cy));
   if (eatenSet) chunk.objects = chunk.objects.filter((o) => !eatenSet.has(o.idx));
+  normalizeBases(chunk.objects);
 
   return chunk;
 }

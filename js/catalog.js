@@ -6,8 +6,11 @@
 // cycle (slot = band % BANDS_PER_CYCLE). This way any theme can appear at
 // any slot: pace at slot 0, cathedrals at slot 5, from the same raw table.
 //
-// `up: true` = never rotate (buildings, trees, standing figures). Pure
-// module: no DOM.
+// `up: true` = never rotate (buildings, trees, standing figures).
+// `stack: true` = eligible to spawn as a vertical tower (see stacks.js /
+// world.js). Only items with base r in ~7-25 are marked — the base unit
+// must be edible by an early-tier hole for the tower to be interactive.
+// Pure module: no DOM.
 
 import { CONFIG } from './config.js';
 
@@ -369,6 +372,15 @@ export const THEMES = [
 
 // Back-compat alias: prior code and tests spoke of BIOMES.
 export const BIOMES = THEMES;
+
+// Items eligible to spawn as a vertical tower: the base unit must be small
+// enough that an early-tier hole can eat it (per the fractal, cycle/slot
+// multipliers scale unit sizes automatically, so deep-cycle towers become
+// emoji skylines for free). The rendering pass treats stack units as an
+// upright vertical strip; `up:true` "standing" items look fine stacked too.
+export function stackable(item) {
+  return item.r >= 7 && item.r <= 22;
+}
 
 // Bands are GEOMETRIC: cycle k's bands are each CYCLE_SIZE_MULT^k wider than
 // cycle 0's, so the world is self-similar — at any scale, a band takes about

@@ -5,6 +5,9 @@
 import { CONFIG } from './config.js';
 import { forEachObjectNear, markEaten } from './world.js';
 import { eat } from './hole.js';
+import {
+  aliveInStack, normalizeBases, landedPosition,
+} from './stacks.js';
 
 export function createSwallow() {
   return {
@@ -13,6 +16,9 @@ export function createSwallow() {
     lastEat: -Infinity,
     falling: [],          // { obj, t, fromX, fromY, spinDir }
     disturbed: new Set(), // objects the rim has engaged; updated until settled
+    // Vertical stack collapse animations:
+    slumps: [],           // { stackId, ck, t, duration } — column drops one unit-height
+    topples: [],          // { stackId, ck, baseX, baseY, dirX, dirY, unitR, t, duration }
   };
 }
 
@@ -68,6 +74,10 @@ function rimPhysics(sw, dt, now, world, hole) {
         spinDir: (o.idx & 1) === 0 ? 1 : -1,
       });
       sw.disturbed.delete(o);
+      // Tower base tipping? Kick off the tower-wide collapse (slump for
+      // short towers, topple for tall ones). The base's fall proceeds
+      // normally on the falling list — the collapse animates in parallel.
+      if (o.stackId) initiateCollapse(sw, world, hole, o);
       continue;
     }
 
@@ -134,11 +144,110 @@ function decayCombo(sw, now, events) {
   }
 }
 
+// A tower's base has just started falling. Decide collapse mode: tall
+// towers topple over sideways, shorter ones slump straight down. The base
+// itself is already on the falling list; this only affects units above.
+function initiateCollapse(sw, world, hole, base) {
+  const alive = aliveInStack(world, base.stackId);
+  if (alive.length <= 1) return; // just the base — nothing to collapse
+  if (alive.length >= CONFIG.STACK_TOPPLE_MIN) {
+    startTopple(sw, world, hole, base);
+  } else {
+    startSlump(sw, base);
+  }
+}
+
+function startSlump(sw, base) {
+  sw.slumps.push({
+    stackId: base.stackId,
+    ck: base.ck,
+    t: 0,
+    duration: CONFIG.STACK_SLUMP_TIME,
+  });
+}
+
+function startTopple(sw, world, hole, base) {
+  const dx = base.x - hole.x;
+  const dy = base.y - hole.y;
+  const mag = Math.hypot(dx, dy) || 1;
+  const dirX = dx / mag;
+  const dirY = dy / mag;
+  // Move all currently-stacked units of this tower into 'toppling'; rim
+  // physics ignores them mid-rotation. The base stays 'falling' (already).
+  for (const chunk of world.chunks.values()) {
+    for (const o of chunk.objects) {
+      if (o.stackId === base.stackId && o.state === 'stacked') {
+        o.state = 'toppling';
+      }
+    }
+  }
+  sw.topples.push({
+    stackId: base.stackId,
+    ck: base.ck,
+    baseX: base.x, baseY: base.y,
+    dirX, dirY,
+    unitR: base.r,
+    t: 0,
+    duration: CONFIG.STACK_TOPPLE_TIME,
+  });
+}
+
+function updateSlumps(sw, dt, world, events) {
+  for (let i = sw.slumps.length - 1; i >= 0; i--) {
+    const s = sw.slumps[i];
+    s.t += dt;
+    if (s.t < s.duration) continue;
+    // Slump complete: promote the next unit to 'idle'. normalizeBases
+    // picks the lowest surviving 'stacked' unit and marks it 'idle' —
+    // rim physics starts acting on it next tick.
+    const chunk = world.chunks.get(s.ck);
+    if (chunk) normalizeBases(chunk.objects);
+    events.push({ type: 'slumpEnd', stackId: s.stackId });
+    sw.slumps.splice(i, 1);
+  }
+}
+
+function updateTopples(sw, dt, world, events) {
+  for (let i = sw.topples.length - 1; i >= 0; i--) {
+    const tp = sw.topples[i];
+    tp.t += dt;
+    if (tp.t < tp.duration) continue;
+    // Topple complete: land each toppling unit on the ground at its
+    // stackIdx-th step along the fall direction. State becomes 'idle' so
+    // rim physics can eat them normally; their idxs are also stamped into
+    // world.eaten so the chunk can't respawn them if it unloads mid-chase.
+    const chunk = world.chunks.get(tp.ck);
+    if (chunk) {
+      let set = world.eaten.get(tp.ck);
+      if (!set) { set = new Set(); world.eaten.set(tp.ck, set); }
+      for (const o of chunk.objects) {
+        if (o.stackId !== tp.stackId || o.state !== 'toppling') continue;
+        const p = landedPosition(tp.baseX, tp.baseY, o.stackIdx, tp.unitR, tp.dirX, tp.dirY);
+        o.x = p.x;
+        o.y = p.y;
+        o.state = 'idle';
+        o.tilt = 0;
+        o.vx = 0; o.vy = 0;
+        set.add(o.idx);
+      }
+    }
+    events.push({
+      type: 'topple',
+      x: tp.baseX, y: tp.baseY,
+      dirX: tp.dirX, dirY: tp.dirY,
+      unitR: tp.unitR,
+    });
+    sw.topples.splice(i, 1);
+  }
+}
+
 // Advance one tick. `now` is seconds on the game clock. Returns events.
 export function swallowUpdate(sw, dt, now, world, hole) {
   const events = [];
   rimPhysics(sw, dt, now, world, hole);
   updateFalling(sw, dt, now, world, hole, events);
+  updateSlumps(sw, dt, world, events);
+  updateTopples(sw, dt, world, events);
   decayCombo(sw, now, events);
   return events;
 }
