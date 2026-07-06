@@ -161,17 +161,25 @@ function startSlump(sw, base) {
   sw.slumps.push({
     stackId: base.stackId,
     ck: base.ck,
+    oldBaseStackIdx: base.stackIdx,
     t: 0,
     duration: CONFIG.STACK_SLUMP_TIME,
   });
 }
 
 function startTopple(sw, world, hole, base) {
-  const dx = base.x - hole.x;
-  const dy = base.y - hole.y;
-  const mag = Math.hypot(dx, dy) || 1;
-  const dirX = dx / mag;
-  const dirY = dy / mag;
+  let dx = base.x - hole.x;
+  let dy = base.y - hole.y;
+  const mag = Math.hypot(dx, dy);
+  let dirX; let dirY;
+  if (mag < 1e-3) {
+    // Hole is dead-center under the base (rare — but avoid a 0/0 direction).
+    // Pick a stable default direction so the topple still reads.
+    dirX = 1; dirY = 0;
+  } else {
+    dirX = dx / mag;
+    dirY = dy / mag;
+  }
   // Move all currently-stacked units of this tower into 'toppling'; rim
   // physics ignores them mid-rotation. The base stays 'falling' (already).
   for (const chunk of world.chunks.values()) {
@@ -226,6 +234,7 @@ function updateTopples(sw, dt, world, events) {
         o.x = p.x;
         o.y = p.y;
         o.state = 'idle';
+        o.landed = true; // renderer draws landed units as ordinary singles
         o.tilt = 0;
         o.vx = 0; o.vy = 0;
         set.add(o.idx);

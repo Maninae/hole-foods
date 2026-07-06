@@ -15,6 +15,7 @@ import { holeProgress } from './hole.js';
 import { drawFxWorld, drawFxText } from './particles.js';
 import { drawLevelFxGround, drawLevelFxBillboard } from './levelfx.js';
 import { CONFIG } from './config.js';
+import { unitLean } from './stacks.js';
 
 export function createRenderer(canvas) {
   const R = {
@@ -133,6 +134,99 @@ function drawHole(ctx, hole, sw, time, screenScale, zoom) {
   }
 }
 
+function drawSingle(ctx, o, hole, t, dpr) {
+  const sx = o.x * t.scale + t.tx;
+  const sy = o.y * t.scaleY + t.ty;
+  const rScreen = o.r * t.scale;
+  const lift = rScreen * 0.22;
+  const tilt = o.tilt || 0;
+  let leanRot = 0;
+  let sink = 0;
+  if (tilt) {
+    const dx = hole.x - o.x;
+    const dy = hole.y - o.y;
+    const dist = Math.max(Math.hypot(dx, dy), 1);
+    const sign = Math.max(-1, Math.min(1, dx / dist));
+    leanRot = tilt * sign;
+    sink = tilt * o.r * 0.25 * t.scale;
+  }
+  drawEmoji(ctx, o.e, sx, sy - lift + sink, rScreen, (o.rot || 0) + leanRot, dpr);
+}
+
+// Draw a tower group as a vertical strip of upright sprites, bottom-up.
+// State branches:
+//   - static/idle: units at stackIdx k render at lift = (k - baseIdx) * step
+//   - slumping:    lift = (k - baseIdx - progress) * step  (smooth drop)
+//   - toppling:    each unit rotates about the base pivot 0..90°
+// The base's teeter tilt drives the whole column's lean, amplified up.
+function drawTower(ctx, tw, hole, sw, t, dpr) {
+  const rScreen = tw.unitR * t.scale;
+  const unitHeightScreen = 2 * rScreen; // billboard vertical diameter
+  const step = unitHeightScreen * CONFIG.STACK_UNIT_OVERLAP;
+  const baseScreenX = tw.baseX * t.scale + t.tx;
+  const baseScreenY = tw.baseY * t.scaleY + t.ty;
+
+  // Column-wide teeter lean direction: horizontal-only, toward the hole.
+  let leanSign = 0;
+  if (tw.tilt) {
+    const dx = hole.x - tw.baseX;
+    const dy = hole.y - tw.baseY;
+    const dist = Math.max(Math.hypot(dx, dy), 1);
+    leanSign = Math.max(-1, Math.min(1, dx / dist));
+  }
+  const baseTilt = tw.tilt || 0;
+
+  // Any active slump / topple driving this tower?
+  const slump = sw.slumps.find((s) => s.stackId === tw.stackId);
+  const topple = sw.topples.find((tp) => tp.stackId === tw.stackId);
+
+  // Determine baseStackIdx: lowest idle/stacked stackIdx among members
+  // (the "effective ground" of the column).
+  let baseStackIdx = Infinity;
+  for (const m of tw.members) {
+    if (m.state === 'idle' || m.state === 'stacked') {
+      if (m.stackIdx < baseStackIdx) baseStackIdx = m.stackIdx;
+    }
+  }
+  if (!isFinite(baseStackIdx)) baseStackIdx = 0;
+
+  const slumpProgress = slump ? Math.min(1, slump.t / slump.duration) : 0;
+  const effectiveBase = slump ? slump.oldBaseStackIdx + slumpProgress : baseStackIdx;
+
+  const toppleAngle = topple ? Math.min(1, topple.t / topple.duration) * (Math.PI / 2) : 0;
+
+  // Draw bottom-up so later (upper) sprites overlap earlier ones.
+  const sorted = [...tw.members].sort((a, b) => a.stackIdx - b.stackIdx);
+  for (const o of sorted) {
+    const stackIdx = o.stackIdx;
+    let sx; let sy; let leanRot;
+    if (o.state === 'toppling') {
+      const s = Math.sin(toppleAngle);
+      const c = Math.cos(toppleAngle);
+      const h = (stackIdx + 0.5) * unitHeightScreen;
+      const dirX = topple ? topple.dirX : 1;
+      const dirY = topple ? topple.dirY : 0;
+      // Rotate the unit's up-vector by toppleAngle: horizontal displacement
+      // along the fall direction, vertical compression by cos.
+      const worldHoriz = (stackIdx + 0.5) * 2 * tw.unitR * s;
+      const worldX = tw.baseX + dirX * worldHoriz;
+      const worldY = tw.baseY + dirY * worldHoriz;
+      sx = worldX * t.scale + t.tx;
+      sy = worldY * t.scaleY + t.ty - h * c;
+      leanRot = toppleAngle * (dirX >= 0 ? 1 : -1);
+    } else {
+      // 'idle' or 'stacked' — upright at the pivot, lifted by column position.
+      const p = stackIdx - effectiveBase;
+      const lift = p * step;
+      const unitTilt = unitLean(baseTilt, stackIdx - baseStackIdx);
+      leanRot = unitTilt * leanSign;
+      sx = baseScreenX;
+      sy = baseScreenY - lift - rScreen * 0.22;
+    }
+    drawEmoji(ctx, o.e, sx, sy, rScreen, (o.rot || 0) + leanRot, dpr);
+  }
+}
+
 export function renderScene(R, state) {
   const { world, hole, cam, sw, fx, levelFx, time } = state;
   const { ctx, w, h, dpr } = R;
@@ -158,32 +252,64 @@ export function renderScene(R, state) {
   });
   ctx.globalAlpha = 1;
 
-  // Collect visible idle objects; sub-pixel skips deep-inner cycles cheaply.
-  const visible = [];
+  // Visible objects — plain singles (state='idle') plus tower groups
+  // (columns of stacked/toppling units drawn as one thing, sorted by the
+  // pivot y). Sub-pixel objects/towers are skipped for cheap LOD.
+  const visible = [];             // plain singles: {type: 'single', y, obj}
+  const towerGroups = new Map();  // stackId -> {members, baseX, baseY, unitR, e, hue, rot, tilt, sortY}
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     for (const o of chunk.objects) {
-      if (o.state !== 'idle' || o.r * t.scale < 1) continue;
+      if (o.r * t.scale < 1) continue;
       const m = o.r * 1.4;
       if (o.x < x0 - m || o.x > x1 + m || o.y < y0 - m || o.y > y1 + m) continue;
-      visible.push(o);
+      const isColumnMember = o.stackId && !o.landed
+        && (o.state === 'idle' || o.state === 'stacked' || o.state === 'toppling');
+      if (isColumnMember) {
+        let tw = towerGroups.get(o.stackId);
+        if (!tw) {
+          tw = {
+            stackId: o.stackId,
+            members: [],
+            baseX: o.x, baseY: o.y,
+            unitR: o.r, e: o.e, hue: o.hue, rot: o.rot || 0,
+            tilt: 0,
+          };
+          towerGroups.set(o.stackId, tw);
+        }
+        tw.members.push(o);
+        if (o.state === 'idle') tw.tilt = o.tilt || 0;
+      } else if (o.state === 'idle') {
+        // Plain single (includes landed post-topple units).
+        visible.push({ type: 'single', y: o.y, obj: o });
+      }
     }
   });
+  // Merge tower groups into the sortable list.
+  for (const tw of towerGroups.values()) {
+    visible.push({ type: 'tower', y: tw.baseY, tower: tw });
+  }
   visible.sort((a, b) => a.y - b.y);
 
   drawHole(ctx, hole, sw, time, screenScale, t.scale);
 
-  // Tease ring on almost-fitting objects — an arc here becomes an ellipse
-  // on the ground plane, so it reads as a ring flat on the floor.
+  // Tease ring on almost-fitting singles — an arc here becomes an ellipse
+  // on the ground plane, so it reads as a ring flat on the floor. Tower
+  // bases can also tease if their base radius sits in the fit window.
   const fitLimit = hole.r * CONFIG.FIT_FACTOR;
-  for (const o of visible) {
-    if (o.r <= fitLimit || o.r >= fitLimit * 1.45) continue;
-    const d = Math.hypot(o.x - hole.x, o.y - hole.y);
-    if (d >= hole.r * 3.2 + o.r) continue;
+  for (const item of visible) {
+    const o = item.type === 'single' ? item.obj : null;
+    const twBase = item.type === 'tower'
+      ? { x: item.tower.baseX, y: item.tower.baseY, r: item.tower.unitR }
+      : null;
+    const target = o || twBase;
+    if (target.r <= fitLimit || target.r >= fitLimit * 1.45) continue;
+    const d = Math.hypot(target.x - hole.x, target.y - hole.y);
+    if (d >= hole.r * 3.2 + target.r) continue;
     ctx.globalAlpha = 0.28 + 0.18 * Math.sin(time * 5);
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(1.5, o.r * 0.06);
+    ctx.lineWidth = Math.max(1.5, target.r * 0.06);
     ctx.beginPath();
-    ctx.arc(o.x, o.y, o.r * 1.12, 0, Math.PI * 2);
+    ctx.arc(target.x, target.y, target.r * 1.12, 0, Math.PI * 2);
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
@@ -202,39 +328,35 @@ export function renderScene(R, state) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // Elliptical contact shadows first, so a later sprite covers a neighbor's
-  // shadow instead of the reverse.
+  // shadow instead of the reverse. Towers only get a single shadow at the
+  // base pivot — no shadow per stacked unit.
   ctx.fillStyle = 'rgba(25, 20, 50, 0.18)';
-  for (const o of visible) {
-    const sx = o.x * t.scale + t.tx;
-    const sy = o.y * t.scaleY + t.ty;
-    const rx = o.r * 0.8 * t.scale;
+  for (const item of visible) {
+    let cx; let cy; let cr;
+    if (item.type === 'single') {
+      const o = item.obj;
+      cx = o.x; cy = o.y; cr = o.r;
+    } else {
+      cx = item.tower.baseX; cy = item.tower.baseY; cr = item.tower.unitR;
+    }
+    const sx = cx * t.scale + t.tx;
+    const sy = cy * t.scaleY + t.ty;
+    const rx = cr * 0.8 * t.scale;
     const ry = rx * 0.38;
     ctx.beginPath();
     ctx.ellipse(sx, sy + ry * 0.35, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Sprites, y-sorted, upright, lifted so they stand on the ground plane.
-  for (const o of visible) {
-    const sx = o.x * t.scale + t.tx;
-    const sy = o.y * t.scaleY + t.ty;
-    const rScreen = o.r * t.scale;
-    const lift = rScreen * 0.22;
-
-    // Teeter lean: horizontal-only, sign follows the hole direction; the
-    // sprite also sinks a touch as if losing its footing over the void.
-    const tilt = o.tilt || 0;
-    let leanRot = 0;
-    let sink = 0;
-    if (tilt) {
-      const dx = hole.x - o.x;
-      const dy = hole.y - o.y;
-      const dist = Math.max(Math.hypot(dx, dy), 1);
-      const sign = Math.max(-1, Math.min(1, dx / dist));
-      leanRot = tilt * sign;
-      sink = tilt * o.r * 0.25 * t.scale;
+  // Sprites, y-sorted. Singles are lifted so they stand on the ground plane;
+  // towers draw as a vertical strip of upright sprites, bottom-up, with the
+  // base's teeter lean amplifying up the column.
+  for (const item of visible) {
+    if (item.type === 'single') {
+      drawSingle(ctx, item.obj, hole, t, dpr);
+    } else {
+      drawTower(ctx, item.tower, hole, sw, t, dpr);
     }
-    drawEmoji(ctx, o.e, sx, sy - lift + sink, rScreen, (o.rot || 0) + leanRot, dpr);
   }
 
   // Score floaters last: upright, min-screen-size, straight onto CSS px.
