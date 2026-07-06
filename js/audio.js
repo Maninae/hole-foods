@@ -123,6 +123,15 @@ export function uiClick() {
   tone('sine', 520, 380, actx.currentTime, 0.06, 0.12);
 }
 
+// A low, chunky thump when a tower topples. Longer + deeper than gulp,
+// with a wide noise burst standing in for a puff of dust hitting ground.
+export function topple() {
+  if (!actx) return;
+  const t0 = actx.currentTime;
+  tone('sine', 120, 40, t0, 0.34, 0.35);
+  noise(t0, 0.28, 1400, 180, 0.22);
+}
+
 // A soft two-note chime for a newly-unlocked achievement or discovery.
 // Distinct from levelUp() (arpeggio) and pop() — a quiet, positive ping.
 export function unlockPing() {

@@ -94,8 +94,13 @@ function newRun() {
 newRun();
 
 function handleEvents(events) {
-  const { hole, fx, cam, progress } = game;
+  const { hole, fx, cam, sw, progress } = game;
   const unlocks = [];
+  // During a tower collapse (slump or topple) the swallow cascade fires many
+  // "+points" chips in quick succession — raise the floater cap so the
+  // "chip pile" reads as intended instead of getting muted after 7.
+  const collapsing = sw && (sw.slumps.length > 0 || sw.topples.length > 0);
+  const floaterCap = collapsing ? CONFIG.STACK_TOPPLE_FLOATER_CAP : 7;
   for (const ev of events) {
     if (ev.type === 'swallow') {
       // Effects budget: past ~200 live particles, skip new bursts entirely.
@@ -104,7 +109,7 @@ function handleEvents(events) {
         suckBurst(fx, Math.random, hole.x, hole.y, hole.r * 0.95, ev.hue, n);
       }
       // Cap point floaters so combo frenzies don't wall the screen with text.
-      if (fx.floats.length < 7 || ev.big) {
+      if (fx.floats.length < floaterCap || ev.big) {
         const jx = (Math.random() - 0.5) * hole.r * 1.6; // spread stacked floaters
         floatText(fx, hole.x + jx, hole.y - hole.r * 1.4, `+${fmtShort(ev.points)}`, {
           size: hole.r * 0.5,
@@ -132,6 +137,14 @@ function handleEvents(events) {
       // Radius milestones are cheapest to check on level-up (hole.r only
       // changes then), so we ingest the current radius here.
       unlocks.push(...ingest(progress, { type: 'radius', r: hole.r }));
+    } else if (ev.type === 'topple') {
+      // Chunky thump + a dust puff on the ground where the base was.
+      audio.topple();
+      if (fx.parts.length < 220) {
+        const n = 22;
+        suckBurst(fx, Math.random, ev.x, ev.y, ev.unitR * 2.6, 30, n);
+      }
+      if (!reducedMotion) shake(cam, Math.min(hole.r * 0.28, ev.unitR * 0.9));
     }
   }
   hud.handleEvents(events);
