@@ -92,7 +92,7 @@ export const CONFIG = {
   // velocity out into a cone away from the hole, gravity + 1-2 damped
   // bounces, then settles as an ordinary idle. Deterministic final resting
   // positions (seeded per unit) let the landing-cap contract stay testable.
-  STACK_AVAL_STAGGER: 0.045,       // seconds between successive unit detaches (bottom-up)
+  STACK_AVAL_STAGGER: 0.03,       // seconds between successive unit detaches (bottom-up)
   STACK_AVAL_PRELEAN_TIME: 0.15,   // Jenga "losing balance" beat before first detach (tall columns only)
   STACK_AVAL_PRELEAN_DEG: 10,      // pre-lean angle (degrees) at t = PRELEAN_TIME (the Jenga read)
   STACK_AVAL_COLLAPSE_ANIM_TIME: 0.5,  // total anim window the column sags + sinks WITH the falling base.
@@ -103,18 +103,19 @@ export const CONFIG = {
   STACK_AVAL_COLLAPSE_LEAN_DEG: 25,    // final lean angle at anim end (grows past PRELEAN_DEG)
   STACK_AVAL_COLLAPSE_SINK_FRAC: 0.45, // fraction of a unit's screen height the column sinks by
                                        // anim end, matching the base's descent into the pit
-  STACK_AVAL_GRAVITY: 2400,        // z-gravity in world-units / s². Lower than earth-ish so
-                                   // the airborne phase reads (bounces last long enough to see).
-  STACK_AVAL_LAUNCH_VZ: 240,       // initial upward velocity of a detaching unit (world-units / s).
+  STACK_AVAL_GRAVITY: 4800,        // z-gravity in world-units / s². Heavy on purpose: collapses
+                                   // should drop fast and become eatable quickly (owner feedback:
+                                   // no floaty launches, no waiting out bounces).
+  STACK_AVAL_LAUNCH_VZ: 90,       // initial upward velocity of a detaching unit (world-units / s).
                                    // Sets the flight time via the ballistic z-arc; vx/vy are then
                                    // derived so the hop ARRIVES at the spiral target.
-  STACK_AVAL_LAUNCH_VZ_PER_IDX: 60, // extra initial vz per idx up the column (top-of-column units
+  STACK_AVAL_LAUNCH_VZ_PER_IDX: 18, // extra initial vz per idx up the column (top-of-column units
                                     // arc higher, so their peak is more visible mid-air).
   STACK_AVAL_SPIN_RATE_DEG: 540,   // max spin rate (deg/s), signed random per unit
-  STACK_AVAL_BOUNCE_VZ: -0.4,      // vz multiplier on landing (elastic-ish)
+  STACK_AVAL_BOUNCE_VZ: -0.25,      // vz multiplier on landing (elastic-ish)
   STACK_AVAL_BOUNCE_SPIN: 0.7,     // spin multiplier on bounce
   STACK_AVAL_MIN_VZ_SETTLE: 25,    // once |vz| drops below this on landing, unit is settled
-  STACK_AVAL_MAX_BOUNCES: 2,       // fallback cap on bounces (in case damping picks a slow decay)
+  STACK_AVAL_MAX_BOUNCES: 1,       // fallback cap on bounces (in case damping picks a slow decay)
   STACK_AVAL_MAX_FLIGHT: 3.5,      // seconds, hard cap on airborne time so a stuck unit can't lock
   STACK_AVAL_DUST_INTERVAL: 0.06,  // min seconds between dust puffs during an avalanche (throttle)
   STACK_AVAL_THUMP_INTERVAL: 0.11, // min seconds between thump sfx during an avalanche (throttle)
