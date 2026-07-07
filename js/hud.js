@@ -53,6 +53,7 @@ export function createHud() {
     sizeLabel: el('size-label'),
     combo: el('combo'),
     toast: el('toast'),
+    announce: el('region-announce'),
     start: el('start'),
     pause: el('pause'),
     bestLine: el('best-line'),
@@ -64,6 +65,9 @@ export function createHud() {
     refs,
     displayScore: 0,
     shownBand: null,
+    reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    announceHold: null,
+    announceDone: null,
     toastTimer: null,
 
     update(dt, hole) {
@@ -97,16 +101,36 @@ export function createHud() {
       }
     },
 
-    // Persistent region label under the score (owner request): always shows
-    // the current area, popping on change. Keyed on the theme CELL (band +
-    // theme), not just the band — the patchwork means walking sideways can
-    // change areas too.
+    // Region display, two stages (owner request): entering a new area fires
+    // a big gold ANNOUNCEMENT below the score that holds, then sinks and
+    // shrinks into the persistent quiet pill. Keyed on the theme CELL
+    // (band + theme) — the patchwork means walking sideways changes areas.
     setArea(key, name) {
       if (key === hud.shownBand) return;
+      const isFirst = hud.shownBand === null;
       hud.shownBand = key;
       refs.toast.textContent = name;
       refs.toast.classList.remove('hidden');
-      repop(refs.toast, 'slide');
+      // Spawn area and reduced-motion get the quiet pill only.
+      if (isFirst || hud.reducedMotion) {
+        repop(refs.toast, 'slide');
+        return;
+      }
+      const a = refs.announce;
+      clearTimeout(hud.announceHold);
+      clearTimeout(hud.announceDone);
+      a.textContent = name;
+      a.classList.remove('hidden', 'announce-settle', 'announce-in');
+      void a.offsetWidth; // restart the entrance animation
+      a.classList.add('announce-in');
+      hud.announceHold = setTimeout(() => {
+        a.classList.add('announce-settle');
+        repop(refs.toast, 'slide'); // pill pulses as the banner lands on it
+      }, 1400);
+      hud.announceDone = setTimeout(() => {
+        a.classList.add('hidden');
+        a.classList.remove('announce-in', 'announce-settle');
+      }, 1800);
     },
 
     showStart() {

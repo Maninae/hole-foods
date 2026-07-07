@@ -275,6 +275,45 @@ h2 {
   100% { transform: translateX(-50%) scale(1); }
 }
 
+/* Flashy area announcement: a big gold title that scales in below the
+   score, holds, then sinks/shrinks into the persistent region pill. */
+#region-announce {
+  position: absolute;
+  top: calc(108px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--cream);
+  background: linear-gradient(180deg, #fff6d8, var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(255, 209, 102, 0.45))
+          drop-shadow(0 2px 4px rgba(10, 4, 24, 0.6));
+  pointer-events: none;
+  opacity: 0;
+}
+#region-announce.announce-in {
+  animation: region-announce-in 0.3s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+@keyframes region-announce-in {
+  0%   { transform: translateX(-50%) translateY(14px) scale(1.25); opacity: 0; }
+  100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+}
+#region-announce.announce-settle {
+  transition: transform 0.35s ease-in, opacity 0.35s ease-in, filter 0.35s ease-in;
+  transform: translateX(-50%) translateY(-38px) scale(0.42);
+  filter: none;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  #region-announce.announce-in { animation: none; opacity: 1; }
+}
+
 #toast.slide {
   animation: slide-in 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
 }
