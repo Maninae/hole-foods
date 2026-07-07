@@ -370,6 +370,38 @@ export const THEMES = [
   },
 ];
 
+// Dense-glyph size normalization. Some emoji (face-close-ups, buildings,
+// stacked-food shots) ink most of their em-square, while typical
+// fruit/veg silhouettes leave ~30-40% whitespace inside their bbox. At
+// equal `r`, dense glyphs read visibly bigger than their neighbors on
+// the ladder, and clusters of them look like walls.
+//
+// This list was derived from empirical bbox-inked-fraction measurement
+// (see tools/glyph-coverage.mjs); glyphs above ~0.72 density get their
+// canonical r shrunk by DENSE_R_SCALE so their visual mass matches the
+// intent of their catalog radius. `item.r` stays the single source of
+// truth for both visual size and physics footprint — no split hitbox.
+// When new emoji join the catalog, re-run tools/glyph-coverage.mjs and
+// update this list.
+const DENSE_R_SCALE = 0.80;
+const DENSE_GLYPHS = new Set([
+  '🌠', '🌌', '🎹', '🔢', '🏢', '🧊', '🏬', '📓', '🚌', '🖥️',
+  '🥞', '🍔', '🎲', '🚚', '🍟', '🏫', '🎂', '🪦', '🍵', '🧮',
+  '🐸', '🏚️', '🏮', '🌎', '⚽', '🌰', '🥝', '🥚', '🍪', '🍿',
+  '🍩', '🏀', '🎅', '🦁', '🚙', '🤖', '🍑', '🎒', '🎁', '🏭',
+  '🍰', '🪗', '🏺', '🎃', '🏠', '💮', '🥥', '📚', '🏯', '🕌',
+  '🍋',
+]);
+for (const t of THEMES) {
+  for (const it of t.items) {
+    if (DENSE_GLYPHS.has(it.e)) {
+      // Floor at 6 (matches R_MIN in catalog.test.js) so the ladder
+      // never dips below its canonical minimum.
+      it.r = Math.max(6, Math.round(it.r * DENSE_R_SCALE));
+    }
+  }
+}
+
 // Back-compat alias: prior code and tests spoke of BIOMES.
 export const BIOMES = THEMES;
 

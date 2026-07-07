@@ -61,8 +61,10 @@ test('a position deep in cycle 1 lives in a level-1 chunk with M-scaled objects'
   let minR = Infinity;
   forEachObjectNear(w, d, 0, C1, (o) => { count++; minR = Math.min(minR, o.r); });
   assert.ok(count > 0, 'no objects generated in cycle 1');
-  // Smallest cycle-1 item is the meadow blueberry (7) scaled by M.
-  assert.ok(minR >= 7 * M * 0.9, `cycle-1 objects too small: ${minR}`);
+  // Smallest cycle-1 item scaled by M. Themes' base radii bottom out at 6
+  // (some dense-glyph shrinks land there — see catalog.js DENSE_R_SCALE);
+  // the ±8% placement jitter accounts for the 0.9 floor.
+  assert.ok(minR >= 6 * M * 0.9, `cycle-1 objects too small: ${minR}`);
 });
 
 test('the loaded chunk count stays bounded at any scale (the perf invariant)', () => {

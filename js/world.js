@@ -152,12 +152,19 @@ function generateChunk(world, level, cx, cy) {
 
   if (isOasis) {
     // Rich: several decorative clusters plus a bunch of scattered singles.
-    // Inside the starter radius, clusters use the small-item cap so a
-    // cluster of watermelons doesn't wall off the spawn view.
-    const rCap = centerDist < CONFIG.STARTER_RADIUS
-      ? STARTER_ITEM_MAX_R
-      : CLUSTER_MAX_BASE_R;
-    const clusterItems = biome.items.filter((it) => it.r <= rCap);
+    // Density scales down with slot mult so a slot-5 chunk (items ~9x
+    // canonical) doesn't paint a wall of overlapping big items — the
+    // cycle-boundary crowding an owner playtest flagged at L12-13.
+    //
+    // Cluster-item filter is PLACED-radius-capped: pattern extents scale
+    // linearly with itemR (ring/blob spacing is ~2.35 r), so items whose
+    // placed r exceeds C/8 would overflow multiple chunks. Inside the
+    // starter radius (band 0, mult=1) we still use STARTER_ITEM_MAX_R.
+    const inStarter = centerDist < CONFIG.STARTER_RADIUS;
+    const rCapPlaced = inStarter
+      ? STARTER_ITEM_MAX_R * mult
+      : Math.min(CLUSTER_MAX_BASE_R * mult, C / 8);
+    const clusterItems = biome.items.filter((it) => it.r * mult <= rCapPlaced);
     const nClusters = clusterItems.length === 0 ? 0 : rng.int(2, 3);
     for (let ci = 0; ci < nClusters; ci++) {
       const item = rng.pickWeighted(clusterItems, (it) => it.w);
@@ -168,7 +175,12 @@ function generateChunk(world, level, cx, cy) {
         tryPlace(item, cxw + p.x, cyw + p.y);
       }
     }
-    const nSingles = rng.int(4, 8);
+    // Singles taper with slot mult too: 4-8 at slot 0, ~2-4 at slot 5.
+    // Big items each occupy a large screen footprint, so fewer of them
+    // per chunk still reads as generous.
+    const singleTop = Math.max(3, Math.round(8 / Math.pow(mult, 0.35)));
+    const singleLow = Math.max(2, singleTop - 3);
+    const nSingles = rng.int(singleLow, singleTop);
     for (let i = 0; i < nSingles; i++) {
       const item = rng.pickWeighted(biome.items, (it) => it.w);
       tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);

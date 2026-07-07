@@ -159,33 +159,36 @@ test('cluster items filter out placed radii larger than 1/8 chunk side', () => {
   // At slot 5 (mult ~8.95), the ring/blob patterns would otherwise extend
   // ~7-9× the item's radius from center — vastly beyond the chunk side. The
   // filter caps cluster items so cluster extents stay within PAD=3.
-  // A slot-5 chunk in the meadow theme should not carry a cluster of watermelons
-  // (r=42 → placed 42*8.95 = 376, cluster radius ~2800 world units).
+  // A slot-5 chunk should not carry a CLUSTER (co-located same-emoji group)
+  // of large items — scattered singles that happen to share an emoji are OK.
   const w = createWorld('cluster-cap');
   const C = CONFIG.CHUNK;
-  // Sit at slot 5, band 5 (mult ~8.95).
-  const dist = 5.5 * CONFIG.BAND_WIDTH;
+  const dist = 5.5 * CONFIG.BAND_WIDTH;      // slot 5, mult ~8.95
   ensureChunksAround(w, dist, 0, 12 * C, 12 * C);
-  // For each level-0 oasis chunk (>= 10 objs), find the largest object radius
-  // in each cluster. If we ever place a cluster item whose placed r pushes
-  // pattern extents beyond a chunk boundary, we've regressed.
+  const cap = (C / 8) * 1.15;                // + tolerance for ±8% jitter
   for (const chunk of w.chunks.values()) {
     if (chunk.level !== 0) continue;
-    // 1/8 chunk side, with a small tolerance for the ±0.08 jitter in placeObject.
-    const cap = chunkKey ? (C / 8) * 1.15 : Number.POSITIVE_INFINITY;
-    // Objects in a cluster share the same emoji AND appear as a set of >=3
-    // items close together. Detect a cluster as any pair-of-objects with same
-    // emoji within 5×r distance.
     const buckets = new Map();
     for (const o of chunk.objects) {
+      // Skip tower members: N stacked units share one (x,y) by design and
+      // would fake a cluster. Only pattern-placed idle objects count.
+      if (o.stackId != null) continue;
       if (!buckets.has(o.e)) buckets.set(o.e, []);
       buckets.get(o.e).push(o);
     }
     for (const [emoji, arr] of buckets) {
-      if (arr.length < 3) continue; // not a cluster
-      const anyLarge = arr.some((o) => o.r > cap);
+      if (arr.length < 3) continue;
+      // Distinguish a cluster from scattered singles: cluster patterns place
+      // ≥3 members within ~4 r_avg of a shared centroid; scattered singles
+      // spread across the whole chunk fail this test.
+      const cx = arr.reduce((s, o) => s + o.x, 0) / arr.length;
+      const cy = arr.reduce((s, o) => s + o.y, 0) / arr.length;
+      const rAvg = arr.reduce((s, o) => s + o.r, 0) / arr.length;
+      const near = arr.filter((o) => Math.hypot(o.x - cx, o.y - cy) < 4 * rAvg);
+      if (near.length < 3) continue;
+      const anyLarge = near.some((o) => o.r > cap);
       assert.ok(!anyLarge,
-        `slot-5 chunk placed cluster of ${emoji} with r > cap ${cap.toFixed(1)}`);
+        `slot-5 chunk placed cluster of ${emoji} (${near.length} co-located) with r > cap ${cap.toFixed(1)}`);
     }
   }
 });
