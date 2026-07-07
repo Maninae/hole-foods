@@ -13,6 +13,7 @@ import {
   createWorld, ensureChunksAround,
 } from '../../js/world.js';
 import { createHole } from '../../js/hole.js';
+import { formationCapsuleBBox } from '../../js/render-sprites.js';
 import { createSwallow, swallowUpdate } from '../../js/swallow.js';
 import {
   pyramidProfile, prismProfile, formationColumnOffsets, hashFormationRoll,
@@ -238,4 +239,40 @@ test('achievement gating: only the first column of a formation emits an achievem
   // The qualifying event carries the formation's full unit count (>= single column).
   assert.ok(qualifying[0].unitCount >= cols[0][1].length,
     'qualifying unitCount should reflect the whole formation, not one column');
+});
+
+// --- Capsule geometry (regression: reviewer-caught bbox-diagonal bug) -----
+
+test('formationCapsuleBBox contains every column silhouette regardless of axis quadrant', () => {
+  const t = { scale: 1, scaleY: 0.72, tx: 0, ty: 0 };
+  const mkTower = (x, y, h, r) => ({
+    baseX: x, baseY: y, unitR: r,
+    members: Array.from({ length: h }, (_, i) => ({ state: i === 0 ? 'idle' : 'stacked', stackIdx: i })),
+  });
+  // Mixed-sign axis (dx > 0, dy < 0): the quadrant the old bbox-diagonal
+  // formula reflected wrong.
+  const towers = [
+    mkTower(0, 0, 2, 20),
+    mkTower(45, -18, 4, 20),
+    mkTower(90, -36, 2, 20),
+  ];
+  const box = formationCapsuleBBox(towers, t);
+  assert.ok(box, 'bbox exists');
+  const unitH = 2 * 20 * t.scale;
+  const step = unitH * CONFIG.STACK_UNIT_OVERLAP;
+  const halfW = unitH * CONFIG.STACK_CAPSULE_WIDTH / 2;
+  for (const tw of towers) {
+    const sx = tw.baseX * t.scale + t.tx;
+    const sy = tw.baseY * t.scaleY + t.ty;
+    const top = sy - 20 * 0.22 - ((tw.members.length - 1) * step + unitH);
+    assert.ok(sx - halfW >= box.x - 0.01 && sx + halfW <= box.x + box.w + 0.01,
+      `column at ${tw.baseX} escapes capsule horizontally`);
+    assert.ok(top >= box.y - 0.01, `column top at ${tw.baseX} escapes capsule`);
+    assert.ok(sy <= box.y + box.h + 0.01, `column base at ${tw.baseX} escapes capsule`);
+  }
+  // Quadrant-free: mirroring the axis (dy sign flip) gives identical extents.
+  const mirrored = towers.map((tw) => mkTower(tw.baseX, -tw.baseY, tw.members.length, 20));
+  const box2 = formationCapsuleBBox(mirrored, t);
+  assert.ok(Math.abs(box.w - box2.w) < 0.01 && Math.abs(box.h - box2.h) < 0.01,
+    'capsule extents must not depend on axis quadrant');
 });
