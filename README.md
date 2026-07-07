@@ -4,7 +4,7 @@
 
 # Hole Foods
 
-**You are a hole. Everything fits, eventually.**
+**Every emoji is on the menu.**
 
 <p align="center">
   <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-blue">
@@ -12,7 +12,7 @@
   <img alt="build step: none" src="https://img.shields.io/badge/build-static-brightgreen">
 </p>
 
-An endless single-player hole game for the web. Park your rim under a snack until it teeters and drops. Grow one discrete step at a time. Roam far enough and the world you started in becomes a bullseye behind you, at 1/6 scale, and again, forever.
+An endless single-player hole game for the web. Park your edge under a snack until it teeters and drops in. Grow one discrete step at a time. Roam far enough and the world you started in becomes a bullseye behind you, at 1/6 scale, and again, forever.
 
 ![Level 7 hole between Farm Country and Desert Bazaar](media/gameplay.png)
 
