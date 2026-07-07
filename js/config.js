@@ -139,6 +139,11 @@ export const CONFIG = {
   // parked over the hole made it 100% invisible. We fade non-fittable
   // occluders and paint a small screen-space rim overlay when the hole
   // is covered. Fittable objects stay full alpha so teeter reads.
-  OCCLUDER_ALPHA: 0.35,   // alpha multiplier for a sprite/tower covering the hole
+  OCCLUDER_ALPHA: 0.35,
+  SPECK_FADE_MIN_PX: 1.5,          // screen radius (px) at/below which an object is culled
+  SPECK_FADE_FULL_PX: 5,           // screen radius (px) at/above which it draws fully opaque;
+                                   // between the two it fades — outgrown specks melt away
+  DECAL_ALPHA: 0.28,               // ground-flavor decals: quiet texture, never mistaken for
+                                   // an eatable item (owner feedback)   // alpha multiplier for a sprite/tower covering the hole
   OVERLAY_FADE_S: 0.15,   // seconds to fade the always-visible rim overlay in/out
 };

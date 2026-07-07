@@ -26,6 +26,7 @@ import { drawHole } from './render-hole.js';
 import {
   holeScreenBBox, shouldFadeSingle, shouldFadeTower,
   advanceOverlayFade, drawHoleOverlay, OCCLUDER_ALPHA,
+  sizeFadeAlpha,
 } from './render-overlay.js';
 
 export function createRenderer(canvas) {
@@ -65,8 +66,9 @@ export function renderScene(R, state) {
 
   drawGround(ctx, world, x0, y0, x1, y1);
 
-  // Ground decals (flat).
-  ctx.globalAlpha = 0.5;
+  // Ground decals (flat) — deliberately faint: they are theme flavor, not
+  // items, and must never read as something the hole should pick up.
+  ctx.globalAlpha = CONFIG.DECAL_ALPHA;
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     for (const d of chunk.decals) {
       if (d.x < x0 - d.r || d.x > x1 + d.r || d.y < y0 - d.r || d.y > y1 + d.r) continue;
@@ -83,7 +85,10 @@ export function renderScene(R, state) {
   const towerGroups = new Map();  // stackId -> {members, baseX, baseY, unitR, ...}
   forEachChunkInRect(world, x0, y0, x1, y1, (chunk) => {
     for (const o of chunk.objects) {
-      if (o.r * t.scale < 1) continue;
+      const sizeAlpha = sizeFadeAlpha(
+        o.r * t.scale, CONFIG.SPECK_FADE_MIN_PX, CONFIG.SPECK_FADE_FULL_PX,
+      );
+      if (sizeAlpha <= 0) continue;
       const m = o.r * 1.4;
       // Tumbling units may have flown off their chunk rect — skip the rect
       // filter for them (they get culled later by the airborne loop below).
@@ -101,6 +106,7 @@ export function renderScene(R, state) {
             baseX: o.x, baseY: o.y,
             unitR: o.r, e: o.e, hue: o.hue, rot: o.rot || 0,
             tilt: 0,
+            sizeAlpha,
           };
           // If an avalanche is running for this tower (pre-lean phase),
           // use its cached pivot so the still-stacked units draw around
@@ -118,7 +124,7 @@ export function renderScene(R, state) {
         if (o.state === 'idle') tw.tilt = o.tilt || 0;
       } else if (o.state === 'idle') {
         // Plain single (includes landed post-avalanche units).
-        visible.push({ type: 'single', y: o.y, obj: o });
+        visible.push({ type: 'single', y: o.y, obj: o, sizeAlpha });
       }
       // 'tumbling' units are handled below in the airborne loop.
     }
@@ -238,6 +244,7 @@ export function renderScene(R, state) {
       }
     }
     if (item.fade) alpha *= OCCLUDER_ALPHA;
+    alpha *= item.type === 'single' ? item.sizeAlpha : item.tower.sizeAlpha;
     ctx.fillStyle = `rgba(25, 20, 50, ${alpha})`;
     const sx = cx * t.scale + t.tx;
     const sy = cy * t.scaleY + t.ty;
@@ -255,9 +262,13 @@ export function renderScene(R, state) {
   // draw at OCCLUDER_ALPHA so the hole's pit + rim beneath remain
   // readable — the genre-standard "big thing in front becomes see-through".
   for (const item of visible) {
-    if (item.fade) {
+    const sizeAlpha = item.type === 'single' ? item.sizeAlpha
+      : item.type === 'tower' ? item.tower.sizeAlpha
+      : 1; // tumbling units are mid-collapse near the hole — never specks
+    const alpha = (item.fade ? OCCLUDER_ALPHA : 1) * sizeAlpha;
+    if (alpha < 1) {
       ctx.save();
-      ctx.globalAlpha = OCCLUDER_ALPHA;
+      ctx.globalAlpha = alpha;
     }
     if (item.type === 'single') {
       drawSingle(ctx, item.obj, hole, t, dpr);
@@ -266,7 +277,7 @@ export function renderScene(R, state) {
     } else {
       drawTower(ctx, item.tower, hole, sw, t, dpr, time);
     }
-    if (item.fade) ctx.restore();
+    if (alpha < 1) ctx.restore();
   }
 
   // Screen-space hole overlay: rim ellipse + gold progress arc. Fades

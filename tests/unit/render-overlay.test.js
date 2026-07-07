@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONFIG } from '../../js/config.js';
 import {
+  sizeFadeAlpha,
   bboxIntersect,
   holeScreenBBox,
   singleScreenBBox,
@@ -234,4 +235,18 @@ test('advanceOverlayFade: clamps to [0, 1]', () => {
   assert.equal(advanceOverlayFade(0, false, 10), 0);
   const overshot = advanceOverlayFade(0.99, true, 10);
   assert.ok(overshot <= 1);
+});
+
+test('sizeFadeAlpha: specks melt out smoothly near the LOD cull', () => {
+  // Below the floor: fully gone (caller skips the draw entirely).
+  assert.equal(sizeFadeAlpha(1.0, 1.5, 5), 0);
+  assert.equal(sizeFadeAlpha(1.5, 1.5, 5), 0);
+  // Above the ceiling: fully opaque.
+  assert.equal(sizeFadeAlpha(5, 1.5, 5), 1);
+  assert.equal(sizeFadeAlpha(300, 1.5, 5), 1);
+  // Monotonic ramp in between.
+  const a = sizeFadeAlpha(2, 1.5, 5);
+  const b = sizeFadeAlpha(3, 1.5, 5);
+  const c = sizeFadeAlpha(4.5, 1.5, 5);
+  assert.ok(a > 0 && a < b && b < c && c < 1, `ramp broken: ${a} ${b} ${c}`);
 });

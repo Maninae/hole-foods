@@ -158,3 +158,14 @@ export function drawHoleOverlay(ctx, hole, t, alpha) {
   }
   ctx.restore();
 }
+
+// Alpha for near-cull specks: objects whose screen radius approaches the
+// sub-pixel cull melt out smoothly instead of lingering as crisp, worthless
+// dots (outgrown lower-cycle leftovers) or popping when their level drops
+// out of the LOD set. 0 at/below minPx (caller skips the draw), 1 at/above
+// fullPx, linear in between.
+export function sizeFadeAlpha(screenR, minPx, fullPx) {
+  if (screenR <= minPx) return 0;
+  if (screenR >= fullPx) return 1;
+  return (screenR - minPx) / (fullPx - minPx);
+}
