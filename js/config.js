@@ -132,4 +132,12 @@ export const CONFIG = {
   STACK_AVAL_BEHIND_SQUASH: 0.55,  // multiplier applied to the local x of any target that lands
                                    // behind the pivot (post-shift). Keeps a few units on the
                                    // hole-adjacent side (the "spilled sideways/short" case).
+
+  // --- Occlusion visibility (js/render-overlay.js) ---
+  // The billboard pass draws sprites over the ground pass, so a big sprite
+  // parked over the hole made it 100% invisible. We fade non-fittable
+  // occluders and paint a small screen-space rim overlay when the hole
+  // is covered. Fittable objects stay full alpha so teeter reads.
+  OCCLUDER_ALPHA: 0.35,   // alpha multiplier for a sprite/tower covering the hole
+  OVERLAY_FADE_S: 0.15,   // seconds to fade the always-visible rim overlay in/out
 };
