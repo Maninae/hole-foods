@@ -4,6 +4,14 @@
 //     for free — that's what sells the pseudo-3D.
 //  2. Billboard (unsquashed): contact shadows, sprites drawn upright and
 //     lifted so they stand on the plane, and score floaters at screen size.
+//     Sprites (and their shadows) that CANNOT be swallowed and cover the
+//     hole are drawn at reduced alpha (OCCLUDER_ALPHA) so the hole never
+//     disappears behind a building. Fittable objects are exempt so the
+//     teeter animation always plays at full alpha.
+//  3. Screen-space overlay: when anything faded this frame, an off-white
+//     rim ellipse + gold progress arc is painted on top so the level cue
+//     survives even the most stubborn stack. Fades in over OVERLAY_FADE_S
+//     and is invisible in open-field play.
 // Owns the canvas + DPR; camera math comes from camera.js.
 
 import { getTransform } from './camera.js';
@@ -15,12 +23,21 @@ import { drawLevelFxGround, drawLevelFxBillboard } from './levelfx.js';
 import { CONFIG } from './config.js';
 import { drawSingle, drawTower, drawTumbling, drawTumblingShadow } from './render-sprites.js';
 import { drawHole } from './render-hole.js';
+import {
+  holeScreenBBox, shouldFadeSingle, shouldFadeTower,
+  advanceOverlayFade, drawHoleOverlay, OCCLUDER_ALPHA,
+} from './render-overlay.js';
 
 export function createRenderer(canvas) {
   const R = {
     canvas,
     ctx: canvas.getContext('2d'),
     w: 0, h: 0, dpr: 1,
+    // Overlay-fade state: eases 0..1 as the hole becomes occluded and
+    // back to 0 when nothing covers it. Persists across frames so the
+    // rim overlay can't pop in/out.
+    overlayFade: 0,
+    lastTime: 0,
     resize() {
       R.dpr = Math.min(2, window.devicePixelRatio || 1);
       R.w = canvas.clientWidth;
@@ -124,6 +141,25 @@ export function renderScene(R, state) {
   }
   visible.sort((a, b) => a.y - b.y);
 
+  // Occlusion fade decisions. A single or tower is an occluder if it
+  // can't be swallowed (base r > hole.r * FIT_FACTOR) AND its screen
+  // bbox overlaps the hole's screen ellipse-bbox. Fittable items are
+  // exempt so teeter stays fully readable; tumbling units are exempt
+  // (mid-collapse, already committed to the mound). The predicate is
+  // pure — see js/render-overlay.js.
+  const holeBox = holeScreenBBox(hole, t);
+  let anyOccluded = false;
+  for (const item of visible) {
+    if (item.type === 'single') {
+      item.fade = shouldFadeSingle(item.obj, hole, holeBox, t);
+    } else if (item.type === 'tower') {
+      item.fade = shouldFadeTower(item.tower, hole, holeBox, t);
+    } else {
+      item.fade = false;
+    }
+    if (item.fade) anyOccluded = true;
+  }
+
   drawHole(ctx, hole, sw, time, screenScale, t.scale);
 
   // Tease ring on almost-fitting singles — an arc here becomes an ellipse
@@ -170,6 +206,8 @@ export function renderScene(R, state) {
   // (Part A: the column reads as ONE object). Airborne tumbling units get
   // their OWN small shadow that stays on the ground while the sprite lifts
   // — the shadow-vs-sprite separation is the readability cue for height.
+  // Occluder shadows also fade — a full-alpha shadow through a faded sprite
+  // reads as a floating puddle.
   const baseShadowAlpha = 0.18;
   for (const item of visible) {
     if (item.type === 'tumbling') {
@@ -199,6 +237,7 @@ export function renderScene(R, state) {
         if (alpha <= 0.001) continue;
       }
     }
+    if (item.fade) alpha *= OCCLUDER_ALPHA;
     ctx.fillStyle = `rgba(25, 20, 50, ${alpha})`;
     const sx = cx * t.scale + t.tx;
     const sy = cy * t.scaleY + t.ty;
@@ -212,8 +251,14 @@ export function renderScene(R, state) {
   // Sprites, y-sorted. Singles lift so they stand on the ground plane;
   // towers draw as a vertical strip of upright sprites with jitter,
   // perspective, and sway (Part A); airborne tumbling units render at
-  // their (x, y) lifted by z with spin (Part B).
+  // their (x, y) lifted by z with spin (Part B). Occluders (item.fade)
+  // draw at OCCLUDER_ALPHA so the hole's pit + rim beneath remain
+  // readable — the genre-standard "big thing in front becomes see-through".
   for (const item of visible) {
+    if (item.fade) {
+      ctx.save();
+      ctx.globalAlpha = OCCLUDER_ALPHA;
+    }
     if (item.type === 'single') {
       drawSingle(ctx, item.obj, hole, t, dpr);
     } else if (item.type === 'tumbling') {
@@ -221,7 +266,17 @@ export function renderScene(R, state) {
     } else {
       drawTower(ctx, item.tower, hole, sw, t, dpr, time);
     }
+    if (item.fade) ctx.restore();
   }
+
+  // Screen-space hole overlay: rim ellipse + gold progress arc. Fades
+  // in over OVERLAY_FADE_S when the hole is occluded, out at the same
+  // rate. Invisible in open-field play (fade=0) so it never double-
+  // draws against the ground-pass rim.
+  const dt = Math.max(0, Math.min(0.1, time - R.lastTime));
+  R.lastTime = time;
+  R.overlayFade = advanceOverlayFade(R.overlayFade, anyOccluded, dt);
+  drawHoleOverlay(ctx, hole, t, R.overlayFade);
 
   // Score floaters last: upright, min-screen-size, straight onto CSS px.
   drawFxText(ctx, fx, t);
