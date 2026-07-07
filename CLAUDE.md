@@ -158,6 +158,22 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 - **Patchwork themes:** themeAt(x,y) is deterministic and seed-independent;
   band 0 is always Berry Meadow. Scale tier comes from distance (bands),
   theme from angle — don't couple them.
+- **Dense-glyph size normalization:** face-close-up emojis (lion, frog),
+  buildings, and other visually dense fills ink more of their em-square
+  than typical fruit silhouettes, so at equal `r` they read visibly
+  bigger than their neighbors. `catalog.js` shrinks the canonical r of
+  such glyphs (bboxFrac >= 0.72 measured via `tools/glyph-coverage.mjs`)
+  by DENSE_R_SCALE=0.80 at module load, floored at 6. `item.r` remains
+  the single source of truth for both visual and physics footprint (no
+  split hitbox). When new emoji join the catalog, re-run the coverage
+  tool and update the DENSE_GLYPHS set. Fractal test's cycle-1 min-r
+  floor uses 6×M as the theoretical lower bound.
+- **Slot-density taper (world.js):** oasis clusters use a PLACED-radius
+  cap (item.r * mult <= min(CLUSTER_MAX_BASE_R * mult, C / 8)), so
+  cluster extents stay within ~two chunks at every slot. Singles count
+  tapers with mult (`Math.round(8 / mult^0.35)`) so slot-5 chunks read
+  airy instead of packed. Cycle-boundary crowding regressions are
+  guarded in tests/unit/world.test.js.
 - **Meta-progression:** achievements/discoveries persist in localStorage
   `holefoods.progress` (versioned JSON, no BigInt inside). newRun() must NOT
   reset it; saves happen on unlock/pause/beforeunload, never per frame. The
