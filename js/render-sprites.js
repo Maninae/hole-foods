@@ -98,6 +98,80 @@ export function drawTumblingShadow(ctx, u, av, t, baseAlpha) {
   ctx.fill();
 }
 
+// Formation-wide AO capsule: one rounded dark rectangle spanning every
+// alive column of a pyramid/skyscraper, using the tallest column's height
+// as the height of the capsule and covering the outermost columns' x range.
+// Called once per formation from render.js. Not called mid-avalanche.
+export function drawFormationCapsule(ctx, towers, t, sw, dpr, time) {
+  // World-space column x centers along the axis and their alive heights.
+  // The formation axis isn't preserved in the tower group; recover it from
+  // the two extreme column positions (works for our 1D formations).
+  let minX = Infinity; let maxX = -Infinity;
+  let minY = Infinity; let maxY = -Infinity;
+  let maxHeight = 1;
+  let unitR = towers[0].unitR;
+  for (const tw of towers) {
+    // Alive height in this column.
+    let baseIdx = Infinity; let topIdx = -Infinity;
+    for (const m of tw.members) {
+      if (m.state !== 'idle' && m.state !== 'stacked') continue;
+      if (m.stackIdx < baseIdx) baseIdx = m.stackIdx;
+      if (m.stackIdx > topIdx) topIdx = m.stackIdx;
+    }
+    if (!isFinite(baseIdx)) continue;
+    const h = Math.max(1, topIdx - baseIdx + 1);
+    if (h > maxHeight) maxHeight = h;
+    if (tw.baseX < minX) minX = tw.baseX;
+    if (tw.baseX > maxX) maxX = tw.baseX;
+    if (tw.baseY < minY) minY = tw.baseY;
+    if (tw.baseY > maxY) maxY = tw.baseY;
+  }
+  if (!isFinite(minX)) return;
+
+  // Screen-space capsule geometry. Extend the outermost columns' bboxes
+  // out by ~half a unit diameter (matches per-column capsule width).
+  const rScreen = unitR * t.scale;
+  const unitHeightScreen = 2 * rScreen;
+  const step = unitHeightScreen * CONFIG.STACK_UNIT_OVERLAP;
+  const capsuleHeight = (maxHeight - 1) * step + unitHeightScreen * CONFIG.STACK_CAPSULE_WIDTH;
+
+  // Convert extents to screen.
+  const s1x = minX * t.scale + t.tx;
+  const s2x = maxX * t.scale + t.tx;
+  const s1y = minY * t.scaleY + t.ty;
+  const s2y = maxY * t.scaleY + t.ty;
+  // Midpoint on screen (works even for axis at an angle: we render the
+  // capsule as a rotated rectangle spanning the two endpoints).
+  const midX = (s1x + s2x) / 2;
+  const midY = (s1y + s2y) / 2;
+  const axisAngle = Math.atan2(s2y - s1y, s2x - s1x);
+  const axisLen = Math.hypot(s2x - s1x, s2y - s1y);
+  const capsuleWidth = axisLen + unitHeightScreen * CONFIG.STACK_CAPSULE_WIDTH;
+
+  ctx.save();
+  ctx.translate(midX, midY - rScreen * 0.22);
+  ctx.rotate(axisAngle);
+  ctx.fillStyle = `rgba(20, 12, 34, ${CONFIG.STACK_CAPSULE_ALPHA})`;
+  const radius = Math.min(capsuleWidth * 0.3, capsuleHeight * 0.3);
+  const x0 = -capsuleWidth / 2;
+  const y0 = -capsuleHeight;
+  const w = capsuleWidth;
+  const h = capsuleHeight;
+  ctx.beginPath();
+  ctx.moveTo(x0 + radius, y0);
+  ctx.lineTo(x0 + w - radius, y0);
+  ctx.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + radius);
+  ctx.lineTo(x0 + w, y0 + h - radius);
+  ctx.quadraticCurveTo(x0 + w, y0 + h, x0 + w - radius, y0 + h);
+  ctx.lineTo(x0 + radius, y0 + h);
+  ctx.quadraticCurveTo(x0, y0 + h, x0, y0 + h - radius);
+  ctx.lineTo(x0, y0 + radius);
+  ctx.quadraticCurveTo(x0, y0, x0 + radius, y0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 // A tower group as a vertical strip of upright sprites, bottom-up.
 // State branches:
 //   - idle/stacked: sits at pivot with lift, jitter, perspective, sway.
@@ -178,11 +252,16 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   // ramps with height. Phase per-stack from a stable hash. Reduced motion
   // cuts it entirely. Pre-lean overrides the sway (the column is losing
   // balance, not idling).
+  // FORMATION UNISON: if this column belongs to a formation (pyramid or
+  // skyscraper), key the phase on formationId so every column of the same
+  // formation sways in lockstep. That's how a skyscraper reads as one
+  // building instead of a picket fence of independently-moving columns.
   let swayAngle = 0;
   if (!REDUCED_MOTION && !av) {
     const heightRamp = Math.min(1, aliveHeight / CONFIG.STACK_SWAY_HEIGHT_REF);
     const amp = CONFIG.STACK_SWAY_TOP_DEG * DEG * heightRamp;
-    const phase = hash01(tw.stackId, 0, 0x5a17) * Math.PI * 2;
+    const phaseKey = tw.formationId ?? tw.stackId;
+    const phase = hash01(phaseKey, 0, 0x5a17) * Math.PI * 2;
     swayAngle = amp * Math.sin((time * 2 * Math.PI) / CONFIG.STACK_SWAY_PERIOD + phase);
   }
   // Compose sway with pre-lean into one column-wide rotation.
@@ -191,7 +270,11 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   // Soft ambient-occlusion capsule behind the column — subtle dark shape
   // that binds the sprites into one silhouette. Skipped during an
   // avalanche (the column is fragmenting; the capsule would trail wrong).
-  if (!av && aliveHeight >= 2) {
+  // Also skipped when the column is part of a FORMATION: the render pass
+  // draws ONE wide capsule spanning the whole formation instead, so the
+  // pyramid/skyscraper reads as a single silhouette (see render.js
+  // drawFormationCapsules).
+  if (!av && aliveHeight >= 2 && !tw.formationId) {
     const capsuleWidth = unitHeightScreen * CONFIG.STACK_CAPSULE_WIDTH;
     const capsuleHeight = (aliveHeight - 1) * step + unitHeightScreen;
     const capsuleTopLift = (topStackIdx - effectiveBase) * step + rScreen * 0.22 + rScreen;
