@@ -157,6 +157,15 @@ function handleEvents(events) {
         suckBurst(fx, Math.random, ev.x, ev.y, ev.unitR * 2.6, 30, n);
       }
       if (!reducedMotion) shake(cam, Math.min(hole.r * 0.28, ev.unitR * 0.9));
+      // Achievements: only tall-path avalanches (>= STACK_TOPPLE_MIN units)
+      // count as topples for the DEMOLITION branch. Slump avalanches still
+      // emit the event for fx/audio; they just don't bump the counter.
+      if (typeof ev.unitCount === 'number'
+          && ev.unitCount >= CONFIG.STACK_TOPPLE_MIN) {
+        unlocks.push(...ingest(progress, {
+          type: 'topple', unitCount: ev.unitCount,
+        }));
+      }
     }
   }
   hud.handleEvents(events);

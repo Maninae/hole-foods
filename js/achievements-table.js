@@ -15,6 +15,7 @@
 // keep their unlocks intact) — never rename, never remove.
 
 import { THEMES } from './catalog.js';
+import { CONFIG } from './config.js';
 
 // 18 architectural-structure emojis that live in the catalog's item tables.
 // "First building swallowed" fires the moment one of these is eaten. Tents,
@@ -59,6 +60,7 @@ export const THEMES_ORDER = THEMES.map((t) => ({
 
 export const ACHIEVEMENT_BRANCHES = [
   'grandeur', 'appetite', 'combo', 'explorer', 'depth', 'homecoming',
+  'demolition',
 ];
 
 export const ACHIEVEMENTS = [
@@ -157,6 +159,28 @@ export const ACHIEVEMENTS = [
     branch: 'homecoming',
     trigger: { kind: 'themeCycleCount', key: 'meadow', min: 6 },
     requires: ['meadow-c2'], col: 3, row: 6 },
+
+  // --- DEMOLITION (towers toppled — cumulative across runs) ---
+  // Only tall-path avalanches (alive >= STACK_TOPPLE_MIN) count; slump
+  // avalanches never bump the counter. The beacon rung sits mid-chain so a
+  // first-ever beacon topple unlocks the entry rung only — you still owe
+  // the game 9 more topples before the beacon rung is available.
+  { id: 'topple-1', name: 'Timber', emoji: '🪵',
+    description: 'Topple your first tall tower.', branch: 'demolition',
+    trigger: { kind: 'counter', name: 'topples', min: 1 },
+    requires: [], col: 0, row: 7 },
+  { id: 'topple-10', name: 'Wrecking Crew', emoji: '🏗️',
+    description: 'Topple 10 tall towers.', branch: 'demolition',
+    trigger: { kind: 'counter', name: 'topples', min: 10 },
+    requires: ['topple-1'], col: 1, row: 7 },
+  { id: 'topple-beacon', name: 'Beacon Down', emoji: '🗼',
+    description: 'Topple a desert beacon.', branch: 'demolition',
+    trigger: { kind: 'toppleBeacon', min: CONFIG.STACK_BEACON_MIN },
+    requires: ['topple-10'], col: 2, row: 7 },
+  { id: 'topple-50', name: 'Demolition Expert', emoji: '🔨',
+    description: 'Topple 50 tall towers.', branch: 'demolition',
+    trigger: { kind: 'counter', name: 'topples', min: 50 },
+    requires: ['topple-beacon'], col: 3, row: 7 },
 ];
 
 export const ACHIEVEMENT_IDS = new Set(ACHIEVEMENTS.map((a) => a.id));

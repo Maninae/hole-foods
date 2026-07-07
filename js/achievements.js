@@ -23,7 +23,16 @@ export {
 } from './achievements-table.js';
 
 export const STORAGE_KEY = 'holefoods.progress';
-export const VERSION = 2;             // v2 adds progress.themeCycles
+export const VERSION = 3;             // v3 adds progress.counters (meta counters)
+
+// Whitelist of counter keys the engine and persistence layer know about.
+// Anything outside this set is dropped on deserialize — a stale/unknown key
+// must never survive into memory (union-on-save would then keep leaking it).
+export const KNOWN_COUNTERS = ['topples'];
+
+// Legacy versions we still migrate FROM. New versions get appended; ancient
+// ones stay so someone with a 6-month-old save doesn't lose progress.
+const LEGACY_VERSIONS = new Set([1, 2]);
 
 // --- State + persistence -------------------------------------------------
 
@@ -33,41 +42,72 @@ export function createProgress() {
     discovered: new Set(),   // theme keys seen at least once (any cycle)
     unlocked: new Set(),     // achievement ids that have fired
     themeCycles: new Set(),  // "themeKey:cycle" pairs ever visited (any run)
+    counters: freshCounters(),
   };
 }
 
-// v2 adds themeCycles; v1 saves migrate cleanly (themeCycles starts empty).
-// Meadow spawn refires "meadow:0" on the next frame anyway, so nothing is lost.
+function freshCounters() {
+  const c = Object.create(null);
+  for (const key of KNOWN_COUNTERS) c[key] = 0;
+  return c;
+}
+
+// v3 adds counters; v1/v2 saves migrate cleanly (counters start empty). A
+// meadow visit refires "meadow:0" on the next frame anyway, so nothing else
+// is lost. Counters are strictly monotonic across the union-on-save merge
+// (see saveProgress), so no legacy field ever needs to be reconstructed.
 export function serializeProgress(progress) {
   return JSON.stringify({
     v: VERSION,
     themes: [...progress.discovered],
     achievements: [...progress.unlocked],
     themeCycles: [...progress.themeCycles],
+    counters: serializeCounters(progress.counters),
   });
+}
+
+function serializeCounters(counters) {
+  const out = {};
+  for (const key of KNOWN_COUNTERS) {
+    const n = counters?.[key];
+    out[key] = Number.isInteger(n) && n >= 0 ? n : 0;
+  }
+  return out;
 }
 
 // Parse a raw string. Defensive: any parse error, wrong shape, or unknown
 // version yields a fresh progress (so upgrading the schema or hand-editing
-// localStorage never crashes the boot). v1 saves are migrated in place —
-// same discovered/unlocked come through, themeCycles starts empty.
+// localStorage never crashes the boot). v1 and v2 saves are migrated in
+// place — same discovered/unlocked come through; v1 themeCycles is dropped
+// (unexpected on v1); v3 counters start empty on any pre-v3 save.
 export function deserializeProgress(raw) {
   const fresh = createProgress();
   if (typeof raw !== 'string' || raw.length === 0) return fresh;
   let parsed;
   try { parsed = JSON.parse(raw); } catch { return fresh; }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return fresh;
-  if (parsed.v !== 1 && parsed.v !== VERSION) return fresh;
+  if (!LEGACY_VERSIONS.has(parsed.v) && parsed.v !== VERSION) return fresh;
   if (Array.isArray(parsed.themes)) {
     for (const k of parsed.themes) if (THEME_KEYS.has(k)) fresh.discovered.add(k);
   }
   if (Array.isArray(parsed.achievements)) {
     for (const id of parsed.achievements) if (ACHIEVEMENT_IDS.has(id)) fresh.unlocked.add(id);
   }
-  if (parsed.v === VERSION && Array.isArray(parsed.themeCycles)) {
+  // themeCycles landed in v2. v1 saves shouldn't carry it — if they do, drop.
+  if ((parsed.v === 2 || parsed.v === VERSION) && Array.isArray(parsed.themeCycles)) {
     for (const s of parsed.themeCycles) {
       const pair = parseThemeCyclePair(s);
       if (pair) fresh.themeCycles.add(`${pair.key}:${pair.cycle}`);
+    }
+  }
+  // counters landed in v3. Ignore on legacy so unknown values can't smuggle in.
+  if (parsed.v === VERSION
+      && parsed.counters
+      && typeof parsed.counters === 'object'
+      && !Array.isArray(parsed.counters)) {
+    for (const key of KNOWN_COUNTERS) {
+      const n = parsed.counters[key];
+      if (Number.isInteger(n) && n >= 0) fresh.counters[key] = n;
     }
   }
   return fresh;
@@ -103,11 +143,18 @@ export function saveProgress(progress, storage) {
     // Union with whatever is already stored before writing: unlocks are
     // monotonic, and a stale tab's blind setItem must never erase progress
     // another tab persisted after this one loaded. Merging into the live
-    // progress also converges this tab's in-memory state.
+    // progress also converges this tab's in-memory state. Counters merge by
+    // MAX per key — every counter the engine ships is monotonic, so max is
+    // the safe union (min would rewind a fresh tab's progress).
     const prior = deserializeProgress(s.getItem(STORAGE_KEY));
     for (const k of prior.discovered) progress.discovered.add(k);
     for (const id of prior.unlocked) progress.unlocked.add(id);
     for (const tc of prior.themeCycles) progress.themeCycles.add(tc);
+    for (const key of KNOWN_COUNTERS) {
+      const priorN = prior.counters[key] ?? 0;
+      const nowN = progress.counters[key] ?? 0;
+      progress.counters[key] = Math.max(priorN, nowN);
+    }
     s.setItem(STORAGE_KEY, serializeProgress(progress));
   } catch {
     /* storage full / disabled — nothing to do */
@@ -129,6 +176,9 @@ function defaultStorage() {
 //   eaten      {count}        — running eatenCount (fed after each swallow)
 //   combo      {mult}         — a combo tier fired
 //   cycle      {cycle}        — hole crossed into a new biome cycle
+//   topple     {unitCount}    — a tall-tower avalanche fully settled. Slump
+//                               avalanches don't count as topples; the
+//                               caller must gate before ingesting.
 //
 // Returned entries have {kind:'discovery', key, name, sticker} or
 // {kind:'achievement', ...achievement definition}. Every unlock fires at most
@@ -152,6 +202,12 @@ export function ingest(progress, event) {
         && event.cycle >= 0) {
       progress.themeCycles.add(`${event.key}:${event.cycle}`);
     }
+  }
+  // Meta counters: monotonic bump on qualifying events. Callers pre-gate
+  // (e.g. only tall-tower avalanches emit an achievement-qualifying topple),
+  // so the engine treats every 'topple' event as one hit.
+  if (event.type === 'topple') {
+    progress.counters.topples = (progress.counters.topples ?? 0) + 1;
   }
   // Fixpoint over the DAG: keep sweeping until no new node unlocks. The
   // ACHIEVEMENTS array is authored in dependency order, so in practice one
@@ -214,6 +270,20 @@ function matches(trigger, event, progress) {
       for (const s of progress.themeCycles) if (s.startsWith(prefix)) count++;
       return count >= trigger.min;
     }
+    case 'counter':
+      // Reads progress.counters[name], not event. Any ingest can trip it once
+      // the counter reaches the threshold — the topple that just bumped the
+      // counter is the usual triggering event, but a subsequent ingest can
+      // also self-heal a stalled chain (hand-edited storage, etc.).
+      return (progress.counters?.[trigger.name] ?? 0) >= trigger.min;
+    case 'toppleBeacon':
+      // One-shot: fires the instant a topple event carries unitCount at or
+      // above the beacon threshold. The `requires` gate holds it until the
+      // rest of the demolition chain is in place, so a beacon topple on
+      // your first-ever tower unlocks topple-1 only.
+      return event.type === 'topple'
+        && typeof event.unitCount === 'number'
+        && event.unitCount >= trigger.min;
     default:
       return false;
   }

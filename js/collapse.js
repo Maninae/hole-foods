@@ -236,6 +236,11 @@ export function initiateCollapse(sw, world, hole, base) {
     cap,
     isTall,
     preLeanUntil,
+    // Total unit count at collapse start (base + all stacked members). The
+    // topple event bubbles this up so achievements can distinguish tall-path
+    // avalanches (>= STACK_TOPPLE_MIN) and beacon-scale ones (>= STACK_BEACON_MIN)
+    // without inspecting collapse internals.
+    unitCount: alive.length,
     t: 0,
     dustLast: -1,
     thumpLast: -1,
@@ -415,6 +420,7 @@ export function updateAvalanches(sw, dt, world, events) {
         x: av.baseX, y: av.baseY,
         dirX: av.dirX, dirY: av.dirY,
         unitR: av.unitR,
+        unitCount: av.unitCount, // full tower height at collapse start
       });
       sw.avalanches.splice(i, 1);
     }

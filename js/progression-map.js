@@ -88,6 +88,8 @@ function shortLabel(node) {
     'cycle-3': 'Cycle III', 'cycle-5': 'Cycle V',
     'meadow-c1': 'Meadow II', 'meadow-c2': 'Meadow III', 'meadow-6c': 'Meadow ×6',
     'first-building': 'Buildings',
+    'topple-1': '1st',        'topple-10': '10',
+    'topple-beacon': 'Beacon', 'topple-50': '50',
   };
   return idAliases[node.id] ?? node.name;
 }
