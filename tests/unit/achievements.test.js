@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { THEMES } from '../../js/catalog.js';
+import { CONFIG } from '../../js/config.js';
 import {
   ACHIEVEMENTS, THEMES_ORDER, BUILDING_EMOJI, VERSION,
   ACHIEVEMENT_BRANCHES, STORAGE_KEY,
@@ -508,4 +509,66 @@ test('ingest emits each unlock exactly once across many repeated events', () => 
   const again2 = ingest(p, { type: 'swallow', emoji: '🏢' });
   const again3 = ingest(p, { type: 'themeVisit', key: 'meadow', cycle: 0 });
   assert.equal(again1.length + again2.length + again3.length, 0);
+});
+
+// --- Demolition branch + v3 counters --------------------------------------
+
+test('v3 counters round-trip through serialize/deserialize', () => {
+  const p = createProgress();
+  p.counters.topples = 7;
+  const back = deserializeProgress(serializeProgress(p));
+  assert.equal(back.counters.topples, 7);
+});
+
+test('v2 saves migrate to v3 with counters starting at zero', () => {
+  const raw = JSON.stringify({
+    v: 2,
+    themes: ['meadow'],
+    achievements: ['size-1m'],
+    themeCycles: ['meadow:0'],
+  });
+  const p = deserializeProgress(raw);
+  assert.ok(p.discovered.has('meadow'));
+  assert.ok(p.unlocked.has('size-1m'));
+  assert.equal(p.counters.topples, 0);
+});
+
+test('saveProgress unions counters by max (stale tab cannot rewind topples)', () => {
+  const store = new Map();
+  const storage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, v),
+  };
+  const rich = createProgress();
+  rich.counters.topples = 12;
+  storage.setItem(STORAGE_KEY, serializeProgress(rich));
+  const stale = createProgress();
+  stale.counters.topples = 3;
+  saveProgress(stale, storage);
+  const merged = deserializeProgress(storage.getItem(STORAGE_KEY));
+  assert.equal(merged.counters.topples, 12);
+});
+
+test('demolition chain: thresholds unlock in order, one event at a time', () => {
+  const p = createProgress();
+  let u = ingest(p, { type: 'topple', unitCount: 10 });
+  assert.ok(u.some((e) => e.id === 'topple-1'), 'first topple unlocks Timber');
+  assert.ok(!p.unlocked.has('topple-10'));
+  for (let i = 0; i < 9; i++) u = ingest(p, { type: 'topple', unitCount: 10 });
+  assert.ok(p.unlocked.has('topple-10'), '10th topple unlocks Wrecking Crew');
+  assert.ok(!p.unlocked.has('topple-beacon'), 'beacon needs a beacon-height topple');
+  u = ingest(p, { type: 'topple', unitCount: CONFIG.STACK_BEACON_MIN });
+  assert.ok(p.unlocked.has('topple-beacon'));
+  assert.equal(p.counters.topples, 11);
+  for (let i = 0; i < 39; i++) ingest(p, { type: 'topple', unitCount: 10 });
+  assert.ok(p.unlocked.has('topple-50'), '50th topple unlocks the capstone');
+});
+
+test('a beacon-height FIRST topple unlocks only Timber (requires-gate holds)', () => {
+  const p = createProgress();
+  const u = ingest(p, { type: 'topple', unitCount: 24 });
+  const ids = new Set(u.map((e) => e.id));
+  assert.ok(ids.has('topple-1'));
+  assert.ok(!ids.has('topple-beacon'), 'beacon gated behind topple-10');
+  assert.ok(!p.unlocked.has('topple-10'));
 });
