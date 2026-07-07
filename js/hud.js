@@ -97,18 +97,16 @@ export function createHud() {
       }
     },
 
-    // Keyed on the theme CELL (band + theme), not just the band — the
-    // patchwork means walking sideways can change areas too.
+    // Persistent region label under the score (owner request): always shows
+    // the current area, popping on change. Keyed on the theme CELL (band +
+    // theme), not just the band — the patchwork means walking sideways can
+    // change areas too.
     setArea(key, name) {
       if (key === hud.shownBand) return;
-      const isFirst = hud.shownBand === null;
       hud.shownBand = key;
-      if (isFirst) return; // no toast for the spawn biome
       refs.toast.textContent = name;
       refs.toast.classList.remove('hidden');
       repop(refs.toast, 'slide');
-      clearTimeout(hud.toastTimer);
-      hud.toastTimer = setTimeout(() => refs.toast.classList.add('hidden'), 2600);
     },
 
     showStart() {

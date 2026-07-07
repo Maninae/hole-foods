@@ -108,19 +108,22 @@
 }
 
 #toast {
+  /* Persistent region label: quieter than the old transient toast so it
+     reads as HUD status, not an announcement. */
   position: absolute;
-  top: calc(78px + env(safe-area-inset-top));
+  top: calc(72px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
-  padding: 10px 26px;
+  padding: 6px 18px;
   border-radius: 99px;
   background: var(--panel);
   border: 1px solid var(--panel-line);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  font-size: 15px;
+  font-size: 12.5px;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  opacity: 0.92;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   white-space: nowrap;
   transition: opacity 0.4s;
