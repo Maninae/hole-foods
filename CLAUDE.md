@@ -177,8 +177,11 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 - **Meta-progression:** achievements/discoveries persist in localStorage
   `holefoods.progress` (versioned JSON, no BigInt inside). newRun() must NOT
   reset it; saves happen on unlock/pause/beforeunload, never per frame. The
-  current schema is v2 — {themes, achievements, themeCycles}. v1 saves
-  migrate cleanly (themeCycles empty; meadow:0 refires next frame). Never
+  current schema is v3 — {themes, achievements, themeCycles, counters}.
+  v1/v2 saves migrate cleanly (missing fields start empty). counters are
+  whitelisted (KNOWN_COUNTERS) monotonic meta-counters (topples) and merge
+  by MAX in the union-on-save. Only tall-path avalanches (>= TOPPLE_MIN
+  units) count as topples — main.js gates on ev.unitCount. Never
   rename/remove an achievement id — live saves in the wild refer to them.
 - **Requires-fixpoint:** the achievement graph is a DAG; each node can list
   `requires: [ids]` and only unlocks once all prereqs are unlocked AND its
