@@ -117,6 +117,79 @@ test('objects a full cycle out are scaled up by CYCLE_SIZE_MULT', () => {
   assert.ok(maxR >= 7 * CONFIG.CYCLE_SIZE_MULT, `max radius ${maxR} not cycle-scaled`);
 });
 
+test('cluster+singles density scales down with slot mult (boundary crowding fix)', () => {
+  // At high slot multipliers (slot 4-5), cluster items and singles counts drop
+  // so a single chunk does not paint a wall of ~9x-scale objects at cycle
+  // boundaries. Owner playtest at L12-13 near the cycle-0 boundary: the frame
+  // was 2/3 filled by overlapping torii/pianos/buses/huts/cows/etc.
+  //
+  // Sample slot 0 (band 0-ish) and slot 5 (band 5) chunks and confirm slot 5
+  // holds fewer objects than slot 0 on average. We deliberately sample a
+  // grid of chunks per slot to average over oasis/desert rolls.
+  const C = CONFIG.CHUNK;
+  function avgObjectsAtSlot(slot, seed) {
+    const w = createWorld(seed);
+    // Distance to sit in target band: start of band = slot × BAND_WIDTH.
+    const dist = (slot + 0.5) * CONFIG.BAND_WIDTH;
+    // Sample a wide swath so oasis rolls average.
+    ensureChunksAround(w, dist, 0, 24 * C, 24 * C);
+    let total = 0; let n = 0;
+    for (const chunk of w.chunks.values()) {
+      if (chunk.level !== 0) continue;
+      const cd = Math.hypot((chunk.cx + 0.5) * C, (chunk.cy + 0.5) * C);
+      // Only sample chunks solidly inside the target band (skip band edges).
+      const b = Math.floor(cd / CONFIG.BAND_WIDTH);
+      if (b !== slot) continue;
+      if (cd < CONFIG.STARTER_RADIUS) continue;
+      total += chunk.objects.length;
+      n++;
+    }
+    assert.ok(n > 20, `slot ${slot}: only ${n} chunks sampled`);
+    return total / n;
+  }
+  const slot0 = avgObjectsAtSlot(0, 'crowd0');
+  const slot5 = avgObjectsAtSlot(5, 'crowd5');
+  // Slot 5 must be visibly emptier than slot 0. 0.7x is a soft target that
+  // still leaves aspirational bigness readable; the point is to strip the wall.
+  assert.ok(slot5 < slot0 * 0.7,
+    `slot 5 chunks not sparser: avg ${slot5.toFixed(1)} vs slot 0 ${slot0.toFixed(1)}`);
+});
+
+test('cluster items filter out placed radii larger than 1/8 chunk side', () => {
+  // At slot 5 (mult ~8.95), the ring/blob patterns would otherwise extend
+  // ~7-9× the item's radius from center — vastly beyond the chunk side. The
+  // filter caps cluster items so cluster extents stay within PAD=3.
+  // A slot-5 chunk in the meadow theme should not carry a cluster of watermelons
+  // (r=42 → placed 42*8.95 = 376, cluster radius ~2800 world units).
+  const w = createWorld('cluster-cap');
+  const C = CONFIG.CHUNK;
+  // Sit at slot 5, band 5 (mult ~8.95).
+  const dist = 5.5 * CONFIG.BAND_WIDTH;
+  ensureChunksAround(w, dist, 0, 12 * C, 12 * C);
+  // For each level-0 oasis chunk (>= 10 objs), find the largest object radius
+  // in each cluster. If we ever place a cluster item whose placed r pushes
+  // pattern extents beyond a chunk boundary, we've regressed.
+  for (const chunk of w.chunks.values()) {
+    if (chunk.level !== 0) continue;
+    // 1/8 chunk side, with a small tolerance for the ±0.08 jitter in placeObject.
+    const cap = chunkKey ? (C / 8) * 1.15 : Number.POSITIVE_INFINITY;
+    // Objects in a cluster share the same emoji AND appear as a set of >=3
+    // items close together. Detect a cluster as any pair-of-objects with same
+    // emoji within 5×r distance.
+    const buckets = new Map();
+    for (const o of chunk.objects) {
+      if (!buckets.has(o.e)) buckets.set(o.e, []);
+      buckets.get(o.e).push(o);
+    }
+    for (const [emoji, arr] of buckets) {
+      if (arr.length < 3) continue; // not a cluster
+      const anyLarge = arr.some((o) => o.r > cap);
+      assert.ok(!anyLarge,
+        `slot-5 chunk placed cluster of ${emoji} with r > cap ${cap.toFixed(1)}`);
+    }
+  }
+});
+
 test('forEachObjectNear only yields objects near the query point', () => {
   const w = createWorld('near');
   ensureChunksAround(w, 0, 0, 3000, 3000);

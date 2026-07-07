@@ -188,6 +188,23 @@ test('biomeDisplayName suffixes with Roman numerals by cycle', () => {
   assert.equal(biomeDisplayName(2 * N), `${biomeForBand(2 * N).name} III`);
 });
 
+test('dense-glyph normalization shrinks face-close-up emojis to keep ink area in step', () => {
+  // Empirical bbox-inked-fraction >= 0.72 = the glyph fills its em-square
+  // more densely than a typical fruit silhouette (see tools/glyph-coverage.mjs).
+  // Those get their canonical r shrunk 20% so they visually match neighbors on
+  // the r ladder. Lion in particular: owner reported it dominating the savanna
+  // vs cheetahs beside it, wanted 20% smaller minimum.
+  const lion = THEMES.find((t) => t.key === 'savanna').items.find((it) => it.e === '🦁');
+  assert.ok(lion, 'savanna must still carry a lion');
+  assert.ok(lion.r <= 26, `lion r=${lion.r} not shrunk to <= 26 (was 32)`);
+  // Piano: bboxFrac 0.994, the densest musichall glyph.
+  const piano = THEMES.find((t) => t.key === 'musichall').items.find((it) => it.e === '🎹');
+  assert.ok(piano.r <= 44, `piano r=${piano.r} not shrunk (was 54)`);
+  // A non-dense reference stays untouched — cheetah bbox is loose (walking body).
+  const cheetah = THEMES.find((t) => t.key === 'savanna').items.find((it) => it.e === '🐆');
+  assert.equal(cheetah.r, 22, `cheetah should stay at its canonical r`);
+});
+
 test('points scale with placed area, never below 1', () => {
   assert.equal(pointsFor(10), BigInt(Math.round(100 / CONFIG.POINTS_DIV)));
   assert.equal(pointsFor(2), 1n);
