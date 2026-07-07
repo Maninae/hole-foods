@@ -246,6 +246,23 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   for its siblings via `spawnStackFromBase`. Skipping 'falling'/'tumbling'
   in `normalizeBases` is load-bearing — otherwise the falling base would
   get re-marked 'idle' mid-fall and re-tip.
+- **Formations (multi-column stacks):** `js/formations.js` mints pyramids
+  (2k−1 columns with a triangular height profile, oasis centerpieces) and
+  prisms (W=3-4 × H=8-14 skyscrapers, rare landmarks) at worldgen time.
+  Each column is an ORDINARY stack (own stackId, own idx run, own avalanche);
+  units share `formationId`/`columnIdx`/`formationKind`/`formationTotalUnits`
+  as visual + coordination bindings. Rendering: one wide AO capsule spans
+  the whole formation (drawFormationCapsule in render-sprites.js); columns
+  share a sway phase keyed on formationId so a skyscraper reads as ONE
+  building instead of a picket fence. Chain destabilization: when a
+  column tips, adjacent standing columns roll `hashFormationRoll` <
+  `FORMATION_CHAIN_PROB` (0.7) and schedule delayed initiateCollapse
+  triggers (`FORMATION_CHAIN_DELAY_MIN..MAX`). `FORMATION_MAX_AIRBORNE`
+  bounds concurrency so a full skyscraper demolition holds framerate.
+  Achievement gating: `sw.formationClaims` tracks the first-collapsing
+  column per formation; only that column's `topple` event carries
+  `achievement=true` with the formation's total unit count, so the
+  demolition counter bumps once per skyscraper, not once per column.
 - **Balance is sim-tuned:** HOLE_R0 (26.4), GROWTH_K (0.0288), and the oasis
   density constants were set by greedy-bot simulation
   (`npm run sim -- 12 <seed>`; L3 reached in 20–45 s greedy, cycle 1
