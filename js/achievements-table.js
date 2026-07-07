@@ -94,10 +94,10 @@ export const ACHIEVEMENTS = [
   { id: 'eat-1000', name: 'Hearty Appetite', emoji: '🍔',
     description: 'Swallow 1,000 things.', branch: 'appetite',
     trigger: { kind: 'eaten', min: 1000 }, requires: ['eat-100'], col: 1, row: 2 },
-  { id: 'eat-10000', name: 'Insatiable', emoji: '🥇',
+  { id: 'eat-10000', name: 'Feast Mode', emoji: '🥇',
     description: 'Swallow 10,000 things.', branch: 'appetite',
     trigger: { kind: 'eaten', min: 10000 }, requires: ['eat-1000'], col: 2, row: 2 },
-  { id: 'eat-100000', name: 'Bottomless', emoji: '♾️',
+  { id: 'eat-100000', name: 'All You Can Eat', emoji: '♾️',
     description: 'Swallow 100,000 things.', branch: 'appetite',
     trigger: { kind: 'eaten', min: 100000 }, requires: ['eat-10000'], col: 3, row: 2 },
 
@@ -116,7 +116,7 @@ export const ACHIEVEMENTS = [
     trigger: { kind: 'combo', min: 5 }, requires: ['combo-x4'], col: 3, row: 3 },
 
   // --- EXPLORER (distinct themes discovered) ---
-  { id: 'themes-3', name: 'Wandering Eye', emoji: '👣',
+  { id: 'themes-3', name: 'Sightseer', emoji: '👣',
     description: 'Discover 3 biomes.', branch: 'explorer',
     trigger: { kind: 'themes', min: 3 }, requires: [], col: 0, row: 4 },
   { id: 'themes-9', name: 'Well-Travelled', emoji: '🧭',
