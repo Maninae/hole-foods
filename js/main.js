@@ -118,9 +118,11 @@ function handleEvents(events) {
           up: hole.r * 1.1,
         });
       }
+      // No shake on swallows, even big ones: feeding frenzies rumbled the
+      // screen constantly and read as overstimulating (owner feedback).
+      // Shake is reserved for payoffs: level-ups and tower-topple settles.
       if (ev.big) {
         audio.gulp();
-        if (!reducedMotion) shake(cam, Math.min(hole.r * 0.3, ev.r * 0.22));
       } else {
         audio.pop(ev.r / hole.r);
       }
