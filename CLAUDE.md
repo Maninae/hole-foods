@@ -77,7 +77,19 @@ js/render.js         two passes for the pseudo-3D view:
                      GROUND (squashed by ISO_Y): ground → decals → hole
                      (pit→falling(clipped)→rim) → tease rings → fxWorld.
                      BILLBOARD (upright): shadows → sprites y-sorted (lifted,
-                     tilt-lean toward hole) → score floaters
+                     tilt-lean toward hole) → hole overlay (rim + gold arc,
+                     fades in when the hole is occluded) → score floaters.
+                     Occluders (non-fittable sprites/towers whose screen bbox
+                     covers the hole) draw at OCCLUDER_ALPHA so the hole
+                     stays visible through a building.
+js/render-hole.js    ground-pass hole draw: pit gradient, falling clip,
+                     shimmer, rim, progress meter. Pure draw code — the
+                     billboard-pass overlay lives in js/render-overlay.js.
+js/render-overlay.js occlusion visibility layer: shouldFadeSingle /
+                     shouldFadeTower predicates (fit-exempt), holeScreenBBox
+                     + bboxIntersect, advanceOverlayFade, drawHoleOverlay
+                     (screen-space rim ellipse + gold progress arc that
+                     eases in when the hole is covered). Pure math + draw.
 js/render-sprites.js drawSingle + drawTower + drawTumbling — pure
                      per-item billboard draw code. Tower rendering carries
                      the Part A verticality cues (tight overlap, per-unit
@@ -125,6 +137,18 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 - **Rim physics, not vacuum:** objects are inert until the hole's edge is
   under them (overhang > 0), teeter below 0.5, tip at 0.5. Never reintroduce
   long-range attraction — it was removed on purpose (owner feedback).
+- **Hole is always visible** (js/render-overlay.js): the ground pass draws
+  the hole, then the billboard pass paints sprites on top. Without help,
+  driving under a big sprite (a downtown building, r ~138 vs an L1 hole
+  r 26.4) hid the hole 100%. Two-part fix: (1) any non-fittable sprite or
+  tower group whose screen bbox overlaps the hole's screen ellipse is
+  drawn at `OCCLUDER_ALPHA` (both shadow and sprite). Fittable objects
+  are exempt so teeter stays fully readable; tumbling avalanche units
+  are exempt too. (2) After the billboard pass, a crisp screen-space rim
+  ellipse + gold progress arc paints on top, fading in over
+  `OVERLAY_FADE_S` when anything faded this frame and out at the same
+  rate. In open-field play (no occluders) the overlay is invisible, so
+  it never double-draws against the ground-pass rim.
 - **Score is BigInt** end-to-end (pointsFor → events → hole.score → storage
   as string). Never mix it into Number arithmetic; format via js/format.js.
 - **Discrete size ladder:** hole.r is always exactly radiusForLevel(level) =
