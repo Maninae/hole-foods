@@ -11,6 +11,7 @@ import {
 } from './catalog.js';
 import { PATTERN_KEYS, layoutCluster } from './patterns.js';
 import { normalizeBases, spawnStackFromBase } from './stacks.js';
+import { tryMintPyramid, tryMintPrism } from './formations.js';
 
 // Cluster extents stay under ~2x a chunk side at every level (spacing scales
 // with item size, item size scales with the level) — 3 chunks of padding
@@ -185,11 +186,25 @@ function generateChunk(world, level, cx, cy) {
       const item = rng.pickWeighted(biome.items, (it) => it.w);
       tryPlace(item, x0 + rng.range(0.05, 0.95) * C, y0 + rng.range(0.05, 0.95) * C);
     }
-    // Towers: some oases stage 1..MAX vertical stacks as their centerpiece.
-    // Stackable items live in the r=7..22 band so the base is edible early;
-    // slot/cycle multipliers scale the whole tower for free at any depth.
+    // Multi-column FORMATIONS: pyramid centerpieces + rare skyscraper prisms.
+    // Attempted BEFORE single-column towers so a pyramid/prism claims the
+    // slot without also placing loose towers in the same chunk (they'd
+    // visually crowd each other). Rolls are always consumed for determinism
+    // (see formations.js) even when the formation is skipped.
     const stackItems = biome.items.filter(stackable);
-    if (stackItems.length > 0 && rng.chance(CONFIG.STACK_OASIS_CHANCE)) {
+    const mintedPyramid = tryMintPyramid({
+      rng, ck: chunkKey(level, cx, cy), biome, stackItems, mult,
+      x0, y0, C, chunk, tryPlaceStack,
+    });
+    const mintedPrism = tryMintPrism({
+      rng, ck: chunkKey(level, cx, cy), biome, stackItems, mult,
+      x0, y0, C, chunk, tryPlaceStack,
+    });
+    // Fallback single-column towers: only if no formation claimed the oasis.
+    // Preserves original tuning (0.5 per-oasis chance, up to STACK_OASIS_MAX).
+    if (!mintedPyramid && !mintedPrism
+        && stackItems.length > 0
+        && rng.chance(CONFIG.STACK_OASIS_CHANCE)) {
       const nTowers = rng.int(1, CONFIG.STACK_OASIS_MAX);
       for (let ti = 0; ti < nTowers; ti++) {
         const item = rng.pickWeighted(stackItems, (it) => it.w);

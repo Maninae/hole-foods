@@ -36,6 +36,7 @@
 import { CONFIG } from './config.js';
 import { chunkSizeAt } from './world.js';
 import { aliveInStack } from './stacks.js';
+import { hashFormationRoll } from './formations.js';
 
 const DEG = Math.PI / 180;
 
@@ -65,6 +66,13 @@ function hash01(stackId, stackIdx, salt) {
 // A tower's base has just started falling. Decide collapse mode and kick
 // off the avalanche. The base itself is on sw.falling (rim physics owns
 // its fall); this only stages the units above.
+//
+// Formation-aware: if this base belongs to a multi-column formation, the
+// FIRST column to collapse (per formation) is flagged achievement=true and
+// carries the formation's total-alive units in its final `topple` event;
+// subsequent chained columns emit fx-only topples (their units still count
+// visually but not toward the demolition counter). Chain destabilization is
+// also scheduled here — see maybeScheduleChain below.
 export function initiateCollapse(sw, world, hole, base) {
   const alive = aliveInStack(world, base.stackId);
   if (alive.length <= 1) return; // just the base — nothing to collapse
@@ -218,6 +226,38 @@ export function initiateCollapse(sw, world, hole, base) {
   }
 
   if (!sw.avalanches) sw.avalanches = [];
+  // Formation gating (achievement + total-unit reporting): if this column
+  // is part of a multi-column formation and no other column of the same
+  // formation has yet been claimed, THIS collapse becomes the "achievement
+  // topple" for the formation. The topple event bubbles that flag up and
+  // carries the FORMATION's total alive units (summed across all columns),
+  // so the demolition counter bumps once per skyscraper regardless of how
+  // many columns actually fall via chain destabilization.
+  if (!sw.formationClaims) sw.formationClaims = new Set();
+  const formationId = base.formationId ?? null;
+  let achievement = true;
+  let unitCount = alive.length;
+  if (formationId) {
+    if (sw.formationClaims.has(formationId)) {
+      achievement = false; // another column of this formation already claimed it
+    } else {
+      sw.formationClaims.add(formationId);
+      // Sum alive units across every column of this formation. Walk the
+      // world once; formations are tagged on every unit at spawn.
+      let total = 0;
+      for (const chunk of world.chunks.values()) {
+        for (const o of chunk.objects) {
+          if (o.formationId !== formationId) continue;
+          // Don't double-count units already tumbling from an earlier
+          // chain step in the same formation.
+          if (o.state === 'idle' || o.state === 'stacked'
+              || o.state === 'falling') total++;
+        }
+      }
+      unitCount = Math.max(total, alive.length);
+    }
+  }
+
   // Physics scale: linear multiplier on vz/gravity/settle-threshold so
   // flight time stays constant regardless of unit radius. Without this
   // scale, a cycle-2+ tower's flight time balloons past MAX_FLIGHT and
@@ -240,12 +280,125 @@ export function initiateCollapse(sw, world, hole, base) {
     // topple event bubbles this up so achievements can distinguish tall-path
     // avalanches (>= STACK_TOPPLE_MIN) and beacon-scale ones (>= STACK_BEACON_MIN)
     // without inspecting collapse internals.
-    unitCount: alive.length,
+    unitCount,
+    achievement,
+    formationId,
+    columnIdx: base.columnIdx ?? null,
     t: 0,
     dustLast: -1,
     thumpLast: -1,
     units,
   });
+
+  // Chain destabilization: if this base belongs to a multi-column formation,
+  // schedule delayed initiateCollapse triggers for adjacent still-standing
+  // columns. Rolls are deterministic per (formationId, columnIdx); the
+  // scheduler runs in updateAvalanches once the delay elapses.
+  if (formationId) {
+    maybeScheduleChain(sw, world, hole, base);
+  }
+}
+
+// Roll each adjacent still-standing column of this base's formation and
+// schedule an initiateCollapse trigger after a hashed delay. Concurrency
+// is bounded: chain starts held back if total airborne units would exceed
+// FORMATION_MAX_AIRBORNE (still scheduled, just fired later once existing
+// tumbling units settle).
+function maybeScheduleChain(sw, world, hole, base) {
+  if (!sw.chainQueue) sw.chainQueue = [];
+  const formationId = base.formationId;
+  const columnIdx = base.columnIdx;
+  if (columnIdx == null) return;
+  // Neighbors: adjacent column indices. Simple 1D formation model.
+  const neighbors = [columnIdx - 1, columnIdx + 1];
+  for (const nIdx of neighbors) {
+    if (nIdx < 0) continue;
+    // Find that column's current base (lowest-stackIdx idle unit).
+    let nBase = null;
+    for (const chunk of world.chunks.values()) {
+      for (const o of chunk.objects) {
+        if (o.formationId !== formationId) continue;
+        if (o.columnIdx !== nIdx) continue;
+        if (o.state !== 'idle') continue;
+        if (!nBase || o.stackIdx < nBase.stackIdx) nBase = o;
+      }
+    }
+    if (!nBase) continue;
+    // Skip if this column is already collapsing (its stackId is in flight).
+    if (sw.avalanches?.some((a) => a.stackId === nBase.stackId)) continue;
+    if (sw.chainQueue.some((q) => q.stackId === nBase.stackId)) continue;
+    // Roll: hashed on (formationId, columnIdx, salt). Deterministic across
+    // saves/reloads and across chain steps (each column rolls independently
+    // for each triggering neighbor, but the salt is fixed so a given
+    // (formation, neighbor) pair always decides the same way for one run).
+    const roll = hashFormationRoll(formationId, nIdx, 0xc4a1);
+    if (roll >= CONFIG.FORMATION_CHAIN_PROB) continue;
+    const delayRoll = hashFormationRoll(formationId, nIdx, 0xde1a);
+    const delay = CONFIG.FORMATION_CHAIN_DELAY_MIN
+      + delayRoll * (CONFIG.FORMATION_CHAIN_DELAY_MAX
+                     - CONFIG.FORMATION_CHAIN_DELAY_MIN);
+    sw.chainQueue.push({
+      stackId: nBase.stackId,
+      formationId,
+      columnIdx: nIdx,
+      base: nBase,
+      // Absolute t: use the parent avalanche's fresh t=0 as the origin.
+      // Since sw doesn't carry a global clock, store delay and countdown
+      // in updateAvalanches (see below).
+      remaining: delay,
+    });
+  }
+}
+
+// Called each frame from updateAvalanches. Ticks down chain-queue delays;
+// when one hits zero (and airborne budget permits), starts that column's
+// avalanche via initiateCollapse — which will in turn schedule ITS neighbors,
+// producing an outward cascade.
+function drainChainQueue(sw, world, hole, dt) {
+  if (!sw.chainQueue || sw.chainQueue.length === 0) return;
+  // Airborne budget: sum tumbling units across all active avalanches.
+  let airborne = 0;
+  for (const av of sw.avalanches) {
+    for (const u of av.units.values()) {
+      if (u.phase === 'tumbling') airborne++;
+    }
+  }
+  for (let i = sw.chainQueue.length - 1; i >= 0; i--) {
+    const q = sw.chainQueue[i];
+    q.remaining -= dt;
+    if (q.remaining > 0) continue;
+    // If airborne budget is blown, hold this chain start until units settle.
+    if (airborne >= CONFIG.FORMATION_MAX_AIRBORNE) {
+      q.remaining = 0.05; // recheck soon
+      continue;
+    }
+    // The queued base may have been eaten (by rim physics engulfing multiple
+    // columns) or already collapsed; if so, drop the queue entry silently.
+    if (sw.avalanches.some((a) => a.stackId === q.stackId)) {
+      sw.chainQueue.splice(i, 1);
+      continue;
+    }
+    // Trigger! Consumes base from idle → falling; initiateCollapse does
+    // the rest AND schedules further chain steps for THIS column's neighbors.
+    if (q.base.state !== 'idle') {
+      sw.chainQueue.splice(i, 1);
+      continue;
+    }
+    // Kick the column into a fall the same way rim physics would. The
+    // easiest handshake: set state='falling', tilt to max, spawn on the
+    // falling list, and call initiateCollapse for the stacked units above.
+    q.base.state = 'falling';
+    q.base.tilt = CONFIG.RIM_TILT_MAX;
+    if (!sw.falling) sw.falling = [];
+    sw.falling.push({
+      obj: q.base, t: 0,
+      fromX: q.base.x, fromY: q.base.y,
+      spinDir: (q.base.idx & 1) === 0 ? 1 : -1,
+    });
+    initiateCollapse(sw, world, hole, q.base);
+    sw.chainQueue.splice(i, 1);
+    airborne += q.base ? 1 : 0;
+  }
 }
 
 // Airborne physics: gravity + integration. On first touchdown the unit is
@@ -409,7 +562,10 @@ function updateAvalanche(av, dt, events) {
   return true;
 }
 
-export function updateAvalanches(sw, dt, world, events) {
+export function updateAvalanches(sw, dt, world, hole, events) {
+  // Chain destabilization: tick pending chain triggers first so a new
+  // avalanche started this frame gets simulated the same frame.
+  drainChainQueue(sw, world, hole, dt);
   if (!sw.avalanches || sw.avalanches.length === 0) return;
   for (let i = sw.avalanches.length - 1; i >= 0; i--) {
     const av = sw.avalanches[i];
@@ -420,7 +576,15 @@ export function updateAvalanches(sw, dt, world, events) {
         x: av.baseX, y: av.baseY,
         dirX: av.dirX, dirY: av.dirY,
         unitR: av.unitR,
-        unitCount: av.unitCount, // full tower height at collapse start
+        // For a lone column, unitCount is the tower height (unchanged).
+        // For a formation's first-collapsed column, unitCount is the
+        // FORMATION's total alive at collapse start (see initiateCollapse).
+        unitCount: av.unitCount,
+        // Achievement flag: true only for the first column of each formation
+        // (and true for lone columns). main.js gates the demolition counter
+        // on this to enforce one-topple-per-formation.
+        achievement: av.achievement ?? true,
+        formationId: av.formationId ?? null,
       });
       sw.avalanches.splice(i, 1);
     }

@@ -146,7 +146,7 @@ export function swallowUpdate(sw, dt, now, world, hole) {
   const events = [];
   rimPhysics(sw, dt, now, world, hole);
   updateFalling(sw, dt, now, world, hole, events);
-  updateAvalanches(sw, dt, world, events);
+  updateAvalanches(sw, dt, world, hole, events);
   decayCombo(sw, now, events);
   return events;
 }

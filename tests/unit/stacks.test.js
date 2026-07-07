@@ -580,10 +580,16 @@ test('partial tower survives chunk unload + reload via the eaten set', () => {
   ensureChunksAround(w, 0, 0, 3000, 3000);
   const groups = towersIn(w);
   assert.ok(groups.size > 0, 'need at least one tower');
-  const [firstStackId, firstList] = [...groups.entries()][0];
+  // Pick any tower with >= 3 units (a formation column of height 1 or 2
+  // isn't a useful fixture for the persistence round-trip).
+  let firstStackId = null;
+  let firstList = null;
+  for (const [id, list] of groups) {
+    if (list.length >= 3) { firstStackId = id; firstList = list; break; }
+  }
+  assert.ok(firstList, 'need at least one tower with 3+ units');
   firstList.sort((a, b) => a.stackIdx - b.stackIdx);
   const originalHeight = firstList.length;
-  assert.ok(originalHeight >= 3, 'need a tower with 3+ units for this test');
   // Simulate eating the two lowest units.
   markEaten(w, firstList[0]);
   markEaten(w, firstList[1]);

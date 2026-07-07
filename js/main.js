@@ -160,7 +160,10 @@ function handleEvents(events) {
       // Achievements: only tall-path avalanches (>= STACK_TOPPLE_MIN units)
       // count as topples for the DEMOLITION branch. Slump avalanches still
       // emit the event for fx/audio; they just don't bump the counter.
-      if (typeof ev.unitCount === 'number'
+      // For formations, only the FIRST column's topple carries
+      // achievement=true, so a chained skyscraper is one topple, not four.
+      if (ev.achievement !== false
+          && typeof ev.unitCount === 'number'
           && ev.unitCount >= CONFIG.STACK_TOPPLE_MIN) {
         unlocks.push(...ingest(progress, {
           type: 'topple', unitCount: ev.unitCount,

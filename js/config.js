@@ -86,6 +86,26 @@ export const CONFIG = {
   STACK_TOPPLE_MIN: 8,          // alive units required for the tall-tower avalanche path (else slump-avalanche)
   STACK_TOPPLE_FLOATER_CAP: 10, // temporarily raised score-floater cap during a collapse
 
+  // --- Formations: multi-column stacks (pyramid, prism) ---
+  // A formation binds K adjacent columns into ONE visual object with chain
+  // destabilization: tipping one column rolls the neighbors to collapse
+  // after a small delay. Each column is still an ordinary stack (own stackId,
+  // own avalanche); the formation is a decoration + coordination layer.
+  FORMATION_SPACING_FRAC: 1.0,          // column spacing as fraction of unit DIAMETER (1.0 = touching)
+  FORMATION_PYRAMID_CHANCE: 0.28,       // per-oasis probability of a pyramid centerpiece
+  FORMATION_PYRAMID_PEAK_MIN: 3,        // peak column height 3 → profile [1,2,3,2,1], 9 units
+  FORMATION_PYRAMID_PEAK_MAX: 5,        // peak 5 → 25 units (roughly cluster-sized)
+  FORMATION_PRISM_CHANCE: 0.06,         // per-oasis probability of a skyscraper (rarer than pyramids)
+  FORMATION_PRISM_WIDTH_MIN: 3,
+  FORMATION_PRISM_WIDTH_MAX: 4,
+  FORMATION_PRISM_HEIGHT_MIN: 8,
+  FORMATION_PRISM_HEIGHT_MAX: 14,
+  FORMATION_PRISM_MAX_UNITS: 56,        // hard cap on prism total (W*H); reject beyond this
+  FORMATION_CHAIN_PROB: 0.7,            // per-neighbor probability the chain fires from a collapsing column
+  FORMATION_CHAIN_DELAY_MIN: 0.12,      // seconds; chain-triggered avalanches begin at this + hashed jitter
+  FORMATION_CHAIN_DELAY_MAX: 0.28,
+  FORMATION_MAX_AIRBORNE: 80,           // if total airborne units exceed this, delay further chain starts
+
   // --- Avalanche collapse (Part B) ---
   // On base tip, the column detaches BOTTOM-UP with a stagger; each unit
   // becomes a ballistic body with fake z (height above ground), horizontal
