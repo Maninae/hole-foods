@@ -554,6 +554,10 @@ const DENSE_GLYPHS = new Set([
   '🍩', '🏀', '🎅', '🦁', '🚙', '🤖', '🍑', '🎒', '🎁', '🏭',
   '🍰', '🪗', '🏺', '🎃', '🏠', '💮', '🥥', '📚', '🏯', '🕌',
   '🍋',
+  // From the 8 new themes (measured via the glyph-coverage probe):
+  // gumdrop, paddy, volcano, reef, aurora, clouds, dragon, neon.
+  '🏙️', '🌇', '🌃', '📱', '💾', '📺', '🐻‍❄️', '🎮', '🍙', '🪨',
+  '🧴', '🕶️', '🛡️', '☁️', '🍚', '🍮', '👑', '🍥', '🏛️', '🏰',
 ]);
 for (const t of THEMES) {
   for (const it of t.items) {
