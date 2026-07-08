@@ -14,9 +14,12 @@ css/ui.css           HUD, overlays, buttons, micro-animations
 css/collection.css   collection overlay + unlock banner styles
 js/config.js         ALL tuning numbers — change gameplay feel here only
 js/rng.js            xmur3+mulberry32 seeded PRNG; chunkRng(seed,cx,cy,salt)
-js/catalog.js        18 themes × slot-normalized item tables (emoji, radius,
-                     weight, hue), geometric band/cycle math, angular
-                     patchwork tiling (themeAt/sectorCount), pointsFor→BigInt
+js/catalog.js        26 themes × slot-normalized item tables (emoji, radius,
+                     weight, hue), each with a `debutBand` that gates when
+                     it first becomes eligible. Geometric band/cycle math,
+                     angular patchwork tiling (themeAt/sectorCount),
+                     poolForBand(band) returns the debut-gated subset,
+                     pointsFor→BigInt
 js/patterns.js       cluster layouts: ring/doubleRing/grid/spiral/arc/blob (pure)
 js/world.js          FRACTAL chunk lifecycle: chunk size scales x6 per biome
                      cycle (leveled grids), deterministic generation, eaten-set
@@ -164,6 +167,15 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 - **Patchwork themes:** themeAt(x,y) is deterministic and seed-independent;
   band 0 is always Berry Meadow. Scale tier comes from distance (bands),
   theme from angle — don't couple them.
+- **Ring-scoped theme pools:** every theme carries `debutBand`; a theme
+  is eligible only at bands >= its debut, so early rings show a smaller
+  variety than the full pool (six classics at band 0, twelve older
+  themes debut at bands 2-12, eight newer themes debut at 6-15). Once
+  a theme debuts it stays in every deeper pool (monotonic), so
+  themeCycle/themeCycleCount achievements remain earnable. themeFor
+  picks from poolForBand(band); the classic order in THEMES[0..5] is
+  preserved, and cycle-repeat achievements refer to theme keys that
+  survive across the pool growth.
 - **Dense-glyph size normalization:** face-close-up emojis (lion, frog),
   buildings, and other visually dense fills ink more of their em-square
   than typical fruit silhouettes, so at equal `r` they read visibly
