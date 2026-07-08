@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { THEMES } from '../../js/catalog.js';
 import { chromium, devices } from 'playwright';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -225,7 +226,7 @@ test('collection overlay opens from start screen and closes with Escape', async 
   const page = await browser.newPage();
   await page.setViewportSize({ width: 1440, height: 900 });
   // Fresh page each test — force no persisted progress so we get the
-  // "0 / 18" locked-state layout.
+  // locked-state layout with 0 discovered stickers.
   await page.addInitScript(() => localStorage.removeItem('holefoods.progress'));
   await page.goto(URL);
   await page.waitForLoadState('networkidle');
@@ -239,11 +240,11 @@ test('collection overlay opens from start screen and closes with Escape', async 
     () => document.getElementById('collection').classList.contains('hidden'),
   )), 'overlay should be visible after clicking Collection');
 
-  // 18 sticker slots rendered.
+  // One sticker slot per theme in the pool.
   const stickers = await page.evaluate(
     () => document.querySelectorAll('#sticker-grid .sticker').length,
   );
-  assert.equal(stickers, 18);
+  assert.equal(stickers, THEMES.length);
 
   // Escape closes the overlay without triggering pause (game is in menu mode
   // anyway, so we assert mode stays 'menu' and overlay is hidden).
@@ -328,7 +329,7 @@ test('map renders every achievement node with an edge count that matches the gra
   }));
   assert.ok(counts.nodes >= 25, `expected at least 25 map nodes, got ${counts.nodes}`);
   assert.ok(counts.edges >= 20, `expected at least 20 edges, got ${counts.edges}`);
-  assert.equal(counts.stickers, 18);
+  assert.equal(counts.stickers, THEMES.length);
   await page.close();
 });
 

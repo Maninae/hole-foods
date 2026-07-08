@@ -4,7 +4,7 @@ import { CONFIG } from '../../js/config.js';
 import {
   THEMES, BIOMES, SLOT_MULTS,
   bandIndex, bandRange, biomeForBand, cycleForBand, slotForBand, sizeMultForBand,
-  sectorCount, sectorForAngle, themeFor, themeAt,
+  sectorCount, sectorForAngle, themeFor, themeAt, poolForBand,
   pointsFor, biomeDisplayName,
 } from '../../js/catalog.js';
 
@@ -13,12 +13,95 @@ import {
 const R_MIN = 6;
 const R_MAX = 66;
 
-test('the pool has 18 themes and the classic six lead cycle 0', () => {
-  assert.equal(THEMES.length, 18);
+test('the pool has 26 themes and the classic six lead cycle 0', () => {
+  assert.equal(THEMES.length, 26);
   assert.equal(BIOMES, THEMES, 'BIOMES must alias THEMES for back-compat');
   const classic = ['meadow', 'orchard', 'bakery', 'toybox', 'funfair', 'downtown'];
   for (let i = 0; i < classic.length; i++) {
     assert.equal(THEMES[i].key, classic[i], `pool[${i}] must be ${classic[i]} (cycle 0 keeps the classics)`);
+  }
+});
+
+test('every theme has an integer debutBand >= 0 (the ring where it first appears)', () => {
+  for (const t of THEMES) {
+    assert.ok(Number.isInteger(t.debutBand),
+      `${t.key} debutBand must be an integer, got ${t.debutBand}`);
+    assert.ok(t.debutBand >= 0,
+      `${t.key} debutBand must be >= 0, got ${t.debutBand}`);
+  }
+});
+
+test('the six classic themes debut at band 0 (spawn ring plays as today)', () => {
+  const classic = ['meadow', 'orchard', 'bakery', 'toybox', 'funfair', 'downtown'];
+  for (const key of classic) {
+    const t = THEMES.find((x) => x.key === key);
+    assert.equal(t.debutBand, 0,
+      `${key} is a classic and must debut at band 0`);
+  }
+});
+
+test('at least 6 themes debut at band >= 6 (some content lives past cycle 0 into deeper rings)', () => {
+  const late = THEMES.filter((t) => t.debutBand >= 6);
+  assert.ok(late.length >= 6,
+    `only ${late.length} themes debut at band >= 6 — the progression payoff is too front-loaded`);
+});
+
+test('poolForBand(band) contains exactly the themes whose debutBand <= band', () => {
+  for (const b of [0, 1, 2, 3, 5, 6, 8, 10, 12, 15, 20]) {
+    const pool = poolForBand(b);
+    const expected = THEMES.filter((t) => t.debutBand <= b).map((t) => t.key).sort();
+    assert.deepEqual(pool.map((t) => t.key).sort(), expected,
+      `poolForBand(${b}) mismatch`);
+  }
+  // Band 0 pool must be exactly the 6 classic themes (deterministic starter).
+  const p0 = poolForBand(0).map((t) => t.key);
+  assert.deepEqual(p0.sort(),
+    ['bakery', 'downtown', 'funfair', 'meadow', 'orchard', 'toybox'].sort(),
+    'band 0 pool must be the six classic themes');
+});
+
+test('per-ring distinct-theme count is 20-30% smaller than the old 18-theme flat pool in early exploration', () => {
+  // Owen's ask: fewer distinct themes visible per ring than today. Today
+  // every ring saw the full 18 themes. The new debut-band system keeps
+  // ring pools small enough in the early/mid game (bands 3-7) that a
+  // player sees a materially smaller variety and gets fresh content as
+  // they progress deeper.
+  for (const b of [3, 4, 5, 6, 7]) {
+    const pool = poolForBand(b);
+    assert.ok(pool.length <= Math.floor(18 * 0.8),
+      `band ${b} pool has ${pool.length} themes — need <= ${Math.floor(18 * 0.8)} for 20%+ reduction vs the old flat 18`);
+  }
+});
+
+test('every theme recurs across cycles: at some band in each of cycles 0-5 the theme is in the pool', () => {
+  // themeCycleCount('meadow', 6) requires meadow to be in the pool at
+  // some band inside 6 different cycles. Every theme's debutBand must
+  // lie inside cycle 5 or earlier so cycle-count achievements stay
+  // earnable; once a theme debuts, it stays in every deeper pool.
+  const N = CONFIG.BANDS_PER_CYCLE;
+  for (const t of THEMES) {
+    assert.ok(t.debutBand < 6 * N,
+      `${t.key} debutBand ${t.debutBand} is past cycle 5 — themeCycleCount achievements would be unearnable`);
+  }
+  // Once debuted, a theme stays available forever (monotonic pool).
+  for (const t of THEMES) {
+    for (const b of [t.debutBand, t.debutBand + 3, t.debutBand + 12]) {
+      const pool = poolForBand(b);
+      assert.ok(pool.some((x) => x.key === t.key),
+        `${t.key} should still be in poolForBand(${b}) after debut`);
+    }
+  }
+});
+
+test('themeFor picks only from poolForBand(band)', () => {
+  for (const b of [1, 2, 3, 5, 6, 10, 15]) {
+    const poolKeys = new Set(poolForBand(b).map((t) => t.key));
+    const n = sectorCount(b);
+    for (let s = 0; s < n; s++) {
+      const picked = themeFor(b, s);
+      assert.ok(poolKeys.has(picked.key),
+        `themeFor(${b}, ${s}) picked ${picked.key} which is not in the band pool`);
+    }
   }
 });
 
@@ -95,15 +178,17 @@ test('themeFor is deterministic and cells at the same band usually differ', () =
     assert.equal(themeFor(b, s), themeFor(b, s), `themeFor(${b},${s}) must be stable`);
   }
   // Two different sectors in the same band SHOULD usually pick different
-  // themes — with 18 themes and a healthy hash there is a ~1/18 chance
-  // any given pair collides, but across a band with many sectors we
-  // expect a wide spread.
+  // themes — with a healthy hash there is a ~1/pool.length chance any
+  // given pair collides, but across a band with many sectors we expect
+  // a wide spread. Ceiling caps at the pool size (a small pool can't
+  // exceed itself no matter how many sectors we have).
   for (const band of [5, 8, 12]) {
     const n = sectorCount(band);
+    const poolSize = poolForBand(band).length;
     const seen = new Set();
     for (let s = 0; s < n; s++) seen.add(themeFor(band, s).key);
-    assert.ok(seen.size >= Math.min(n, 4),
-      `band ${band} (${n} sectors) only reached ${seen.size} distinct themes`);
+    assert.ok(seen.size >= Math.min(n, poolSize, 4),
+      `band ${band} (${n} sectors, pool ${poolSize}) only reached ${seen.size} distinct themes`);
   }
 });
 

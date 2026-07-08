@@ -17,13 +17,14 @@
 import { THEMES } from './catalog.js';
 import { CONFIG } from './config.js';
 
-// 18 architectural-structure emojis that live in the catalog's item tables.
+// Architectural-structure emojis that live in the catalog's item tables.
 // "First building swallowed" fires the moment one of these is eaten. Tents,
 // fairground rides, and trees are deliberately excluded — the achievement is
 // about swallowing a REAL building, not just a large object.
 export const BUILDING_EMOJI = new Set([
   '🛖', '🏠', '🏡', '⛪', '🏢', '🏬', '🏚️',
   '🏫', '⛩️', '🏯', '🕌', '🛕', '🏭', '🏗️',
+  '🏰', '🏛️', '🏙️',
 ]);
 
 // One sticker emoji per theme for the discovery grid. Curated (not just the
@@ -48,6 +49,14 @@ const THEME_STICKERS = {
   jungle:    '🐆',
   desert:    '🐫',
   factory:   '🤖',
+  gumdrop:   '🍬',
+  paddy:     '🍚',
+  volcano:   '🌋',
+  reef:      '🐠',
+  aurora:    '🐺',
+  clouds:    '☁️',
+  dragon:    '🐉',
+  neon:      '🌃',
 };
 
 // Discovery slots, in the fixed pool order — same layout every session so the
@@ -125,8 +134,9 @@ export const ACHIEVEMENTS = [
     description: 'Discover 9 biomes.', branch: 'explorer',
     trigger: { kind: 'themes', min: 9 }, requires: ['themes-3'], col: 1, row: 4 },
   { id: 'all-themes', name: 'Cartographer', emoji: '🗺️',
-    description: 'Discover all 18 biomes.', branch: 'explorer',
-    trigger: { kind: 'themes', min: 18 }, requires: ['themes-9'], col: 2, row: 4 },
+    description: `Discover all ${THEMES.length} biomes.`, branch: 'explorer',
+    trigger: { kind: 'themes', min: THEMES.length },
+    requires: ['themes-9'], col: 2, row: 4 },
 
   // --- DEPTH (cycles reached) ---
   { id: 'full-cycle', name: 'Around the World', emoji: '🔄',

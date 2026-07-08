@@ -177,15 +177,18 @@ test('cluster items filter out placed radii larger than 1/8 chunk side', () => {
       buckets.get(o.e).push(o);
     }
     for (const [emoji, arr] of buckets) {
-      if (arr.length < 3) continue;
-      // Distinguish a cluster from scattered singles: cluster patterns place
-      // ≥3 members within ~4 r_avg of a shared centroid; scattered singles
-      // spread across the whole chunk fail this test.
+      if (arr.length < 6) continue;
+      // Distinguish a real cluster from scattered singles: cluster patterns
+      // (ring/doubleRing/grid/spiral/arc/blob) all place at least ~6-22
+      // members within ~4 r_avg of a shared centroid, while scattered
+      // singles at slot 5 (~2-4 per chunk) can occasionally co-locate but
+      // never reach that count. Threshold pinned at 6 so scattered singles
+      // that happen to share an emoji don't false-positive.
       const cx = arr.reduce((s, o) => s + o.x, 0) / arr.length;
       const cy = arr.reduce((s, o) => s + o.y, 0) / arr.length;
       const rAvg = arr.reduce((s, o) => s + o.r, 0) / arr.length;
       const near = arr.filter((o) => Math.hypot(o.x - cx, o.y - cy) < 4 * rAvg);
-      if (near.length < 3) continue;
+      if (near.length < 6) continue;
       const anyLarge = near.some((o) => o.r > cap);
       assert.ok(!anyLarge,
         `slot-5 chunk placed cluster of ${emoji} (${near.length} co-located) with r > cap ${cap.toFixed(1)}`);

@@ -119,8 +119,7 @@ test('layout coords (col, row) are unique per node', () => {
   }
 });
 
-test('discovery table covers all 18 themes in THEMES order', () => {
-  assert.equal(THEMES_ORDER.length, 18);
+test('discovery table covers every theme in THEMES order', () => {
   assert.equal(THEMES_ORDER.length, THEMES.length);
   for (let i = 0; i < THEMES.length; i++) {
     assert.equal(THEMES_ORDER[i].key, THEMES[i].key);
@@ -262,16 +261,18 @@ test('meadow-6c does NOT count non-meadow themes toward its total', () => {
 
 // --- Requires fixpoint cascades ------------------------------------------
 
-test('capstone does NOT fire when only 17 of 18 are discovered', () => {
+test('capstone does NOT fire when one theme short of the full set', () => {
   const p = createProgress();
-  for (let i = 0; i < 17; i++) ingest(p, { type: 'themeVisit', key: THEMES[i].key, cycle: 0 });
+  for (let i = 0; i < THEMES.length - 1; i++) {
+    ingest(p, { type: 'themeVisit', key: THEMES[i].key, cycle: 0 });
+  }
   assert.ok(!p.unlocked.has('all-themes'));
   // themes-3 and themes-9 have unlocked though — they're on the same branch.
   assert.ok(p.unlocked.has('themes-3'));
   assert.ok(p.unlocked.has('themes-9'));
 });
 
-test('discovering all 18 themes fires the whole explorer chain in one sweep', () => {
+test('discovering every theme fires the whole explorer chain in one sweep', () => {
   const p = createProgress();
   for (const t of THEMES) ingest(p, { type: 'themeVisit', key: t.key, cycle: 0 });
   assert.ok(p.unlocked.has('themes-3'));
@@ -279,8 +280,8 @@ test('discovering all 18 themes fires the whole explorer chain in one sweep', ()
   assert.ok(p.unlocked.has('all-themes'));
 });
 
-test('all-themes self-heals: 18 persisted discoveries without the unlock fire on any ingest', () => {
-  // A save can hold all 18 discoveries but no all-themes unlock (partial
+test('all-themes self-heals: full discovery set without the unlock fires on any ingest', () => {
+  // A save can hold every discovery but no all-themes unlock (partial
   // write, hand-edited storage). The themes trigger reads discovered on
   // every ingest, so the next event of ANY type repairs the chain.
   const p = createProgress();
