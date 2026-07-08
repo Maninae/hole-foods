@@ -328,3 +328,70 @@ h2 {
   #level-bar { width: 84px; }
   .hud-right button { width: 44px; height: 44px; }
 }
+
+/* --- Virtual joystick (js/joystick.js) --------------------------------
+   Bottom-right corner, translucent and unobtrusive. Sizes and opacity come
+   from CONFIG (custom properties set inline on the root by joystick.js).
+   The .hidden rule from base.css handles the show/hide gating.            */
+
+#joystick {
+  position: fixed;
+  bottom: calc(var(--joystick-margin-px, 22px) + env(safe-area-inset-bottom));
+  right: calc(var(--joystick-margin-px, 22px) + env(safe-area-inset-right));
+  width: var(--joystick-ring-px, 120px);
+  height: var(--joystick-ring-px, 120px);
+  z-index: 30;
+  pointer-events: auto;
+  touch-action: none;
+  transition: opacity 0.2s;
+}
+
+/* Outer ring: soft translucent circle that reads over any biome ground.
+   The double halo (border + inset shadow) keeps it legible on both light
+   and dark biomes without shouting. */
+.joystick-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5px solid rgba(255, 255, 255, 0.32);
+  box-shadow:
+    0 4px 14px rgba(10, 4, 24, 0.35),
+    inset 0 0 24px rgba(10, 4, 24, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  opacity: var(--joystick-opacity-idle, 0.55);
+  transition: opacity 0.2s ease;
+}
+
+/* Knob: slightly stronger contrast than the ring so the touch target
+   reads at a glance. Snaps home with a springy ease when released. */
+.joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--joystick-knob-px, 50px);
+  height: var(--joystick-knob-px, 50px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.24);
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 3px 10px rgba(10, 4, 24, 0.45),
+              inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+  opacity: 0.85;
+  transform: translate(-50%, -50%);
+  transition: transform 0.18s cubic-bezier(0.2, 1.4, 0.4, 1), opacity 0.2s;
+  will-change: transform;
+}
+
+/* Active state: subtle opacity bump so the player feels the grab. The knob
+   loses its ease so tracking stays 1:1 with the finger. */
+#joystick.joystick-active .joystick-ring {
+  opacity: var(--joystick-opacity-active, 0.85);
+}
+#joystick.joystick-active .joystick-knob {
+  opacity: 1;
+  transition: transform 0s, opacity 0.15s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joystick-knob { transition: transform 0s, opacity 0.15s; }
+}
