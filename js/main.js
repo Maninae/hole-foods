@@ -11,6 +11,7 @@ import {
   createLevelFx, spawnLevelUp, updateLevelFx, intensityForLevel, isMilestone,
 } from './levelfx.js';
 import { createInput } from './input.js';
+import { createJoystick } from './joystick.js';
 import { createHud, saveBest } from './hud.js';
 import { themeAt, themeDisplayName, cycleForBand } from './catalog.js';
 import { fmtShort } from './format.js';
@@ -20,7 +21,8 @@ import { createCollectionUI } from './collection-ui.js';
 
 const canvas = document.getElementById('game');
 const R = createRenderer(canvas);
-const input = createInput(canvas);
+const joystick = createJoystick({ onAnyGesture: () => audio.unlockAudio() });
+const input = createInput(canvas, joystick);
 const hud = createHud();
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -66,6 +68,7 @@ const collectionUI = createCollectionUI({
       game.mode = 'playing';
       audio.uiClick();
     }
+    syncJoystick();
   },
 });
 
@@ -237,6 +240,12 @@ requestAnimationFrame(frame);
 
 // --- UI wiring -------------------------------------------------------------
 
+// Joystick visibility follows live-play mode: hidden on start / pause /
+// collection overlay, visible during 'playing' on touch devices.
+function syncJoystick() {
+  joystick.setPlayMode(game.mode === 'playing');
+}
+
 function startRun() {
   audio.unlockAudio();
   audio.startAmbient();
@@ -244,6 +253,7 @@ function startRun() {
   game.mode = 'playing';
   hud.hideStart();
   hud.hidePause();
+  syncJoystick();
 }
 
 function pauseGame() {
@@ -252,12 +262,14 @@ function pauseGame() {
   saveBest(game.hole);
   saveMeta();
   hud.showPause();
+  syncJoystick();
 }
 
 function resumeGame() {
   game.mode = 'playing';
   hud.hidePause();
   audio.uiClick();
+  syncJoystick();
 }
 
 input.onPause = () => {
@@ -294,6 +306,7 @@ document.getElementById('btn-map').addEventListener('click', () => {
     saveBest(game.hole);
     saveMeta();
     game.resumeAfterCollection = true;
+    syncJoystick();
   }
   collectionUI.open();
 });

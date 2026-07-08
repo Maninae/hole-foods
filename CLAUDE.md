@@ -39,7 +39,15 @@ js/stacks.js         pure helpers for vertical stacks ("towers"): grouping
                      interactive; the rest sit in state='stacked' until an
                      avalanche detaches them into state='tumbling'.
 js/camera.js         eased follow + lookahead, size-driven zoom, shake (pure)
-js/input.js          keyboard steer (WASD/arrows) + touch drag → {x,y,mag}
+js/input.js          keyboard steer (WASD/arrows) + virtual joystick +
+                     whole-canvas touch drag → {x,y,mag}
+js/joystick.js       corner-anchored virtual joystick for touch devices:
+                     translucent ring + knob DOM in bottom-right, pointer-
+                     capture drag, {x,y,mag} steering that plugs into
+                     input.getDirection. Visible only on touch devices
+                     (pointer:coarse or first-touch belt-and-suspenders)
+                     during 'playing' mode. Pure steerFromOffset math
+                     unit-tested; wiring covered by e2e on iPhone 13.
 js/audio.js          WebAudio synth: pop/gulp/combo/levelup/ambient; mute persists
 js/sprites.js        emoji → offscreen-canvas cache, size buckets ≤1024px;
                      bigger draws fall back to direct fillText (stays crisp)
@@ -292,11 +300,13 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ## Testing
 
 ```
-npm test           # 139 unit tests (node --test tests/unit/*.test.js)
-npm run test:e2e   # 9 Playwright tests: real steering → swallow → growth,
+npm test           # 202 unit tests (node --test tests/unit/*.test.js)
+npm run test:e2e   # 11 Playwright tests: real steering → swallow → growth,
                    # pause/mute/best persistence, Cmd+Tab stuck-key,
                    # collection overlay (Escape + P capture), HUD map
-                   # button flow, map DOM shape, mobile
+                   # button flow, map DOM shape, mobile boot, mobile
+                   # virtual joystick steers + hides on pause, desktop
+                   # confirms the joystick stays absent
 npm run sim -- 12  # headless greedy-bot balance sim (minutes, seed args)
 ```
 

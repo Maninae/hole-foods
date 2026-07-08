@@ -1,5 +1,7 @@
-// Input: keyboard steer (WASD/arrows) + touch drag → {x, y, mag}. Desktop is
-// keyboard-only by design; touch stays because phones have no arrow keys.
+// Input: keyboard steer (WASD/arrows) + virtual joystick + whole-canvas touch
+// drag → {x, y, mag}. Desktop is keyboard-only by design; the joystick is the
+// deliberate mobile control (js/joystick.js), and the canvas drag stays as
+// the fallback for touches that begin outside the joystick's corner.
 
 import { screenToWorld } from './camera.js';
 
@@ -10,7 +12,8 @@ const KEY_DIRS = {
   KeyD: [1, 0], ArrowRight: [1, 0],
 };
 
-export function createInput(canvas) {
+// `joystick` is the handle from createJoystick(); pass null in tests to skip.
+export function createInput(canvas, joystick = null) {
   const state = {
     tx: 0, ty: 0,          // last touch position in CSS pixels
     touching: false,       // true only while a finger is on the canvas
@@ -71,6 +74,14 @@ export function createInput(canvas) {
       }
       const len = Math.hypot(x, y);
       if (len > 0) return { x: x / len, y: y / len, mag: 1 };
+    }
+    // Virtual joystick: takes priority over the canvas drag while active,
+    // since it's the deliberate control surface. Returns zero when the
+    // knob is idle or the joystick is hidden, so the drag fallback kicks
+    // in naturally on desktop and for touches that miss the corner.
+    if (joystick) {
+      const jd = joystick.direction();
+      if (jd.mag > 0) return jd;
     }
     // Touch drag: steer toward the finger while it's down; dead zone at center.
     if (state.touching) {
