@@ -22,7 +22,7 @@ import { drawFxWorld, drawFxText } from './particles.js';
 import { drawLevelFxGround, drawLevelFxBillboard } from './levelfx.js';
 import { CONFIG } from './config.js';
 import {
-  drawSingle, drawTower, drawTumbling, drawTumblingShadow, drawFormationCapsule,
+  drawSingle, drawTower, drawTumbling, drawTumblingShadow,
 } from './render-sprites.js';
 import { drawHole } from './render-hole.js';
 import {
@@ -210,28 +210,6 @@ export function renderScene(R, state) {
   // Sprites and shadows go straight to CSS-pixel space so nothing gets
   // vertically squished; we manually map world -> screen per draw.
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  // Formation AO capsule: for multi-column pyramids and skyscrapers, draw a
-  // single wide dark backdrop that spans every alive column of the formation.
-  // Done in one pass (before individual shadows) so the formation reads as
-  // ONE object silhouette rather than a picket fence of independent columns.
-  // Skipped mid-avalanche (any column collapsing) — the capsule would trail
-  // the fragmenting columns.
-  const formations = new Map(); // formationId → [towers...]
-  for (const item of visible) {
-    if (item.type !== 'tower' || !item.tower.formationId) continue;
-    const fid = item.tower.formationId;
-    let list = formations.get(fid);
-    if (!list) { list = []; formations.set(fid, list); }
-    list.push(item.tower);
-  }
-  for (const [fid, towers] of formations) {
-    if (towers.length < 2) continue; // single-column formation degenerate case
-    // Skip if any column of this formation is mid-avalanche.
-    const collapsing = sw.avalanches.some((a) => a.formationId === fid);
-    if (collapsing) continue;
-    drawFormationCapsule(ctx, towers, t, sw, dpr, time);
-  }
 
   // Elliptical contact shadows first, so a later sprite covers a neighbor's
   // shadow instead of the reverse. Towers get a widened/darker base shadow

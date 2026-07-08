@@ -98,67 +98,6 @@ export function drawTumblingShadow(ctx, u, av, t, baseAlpha) {
   ctx.fill();
 }
 
-// Formation-wide AO capsule bbox, in screen space. Pure and testable.
-// Columns are UPRIGHT billboards: height always points straight up on
-// screen, so the capsule is a screen-ALIGNED rectangle containing every
-// alive column's silhouette. Never rotate it — the old rotated-rectangle
-// version derived its angle from the bounding-box diagonal, which is
-// reflected wrong whenever the formation axis has dx·dy < 0 (~40% of
-// formations), and tilting the height direction was wrong even when the
-// angle wasn't (reviewer-caught; regression test pins containment).
-export function formationCapsuleBBox(towers, t) {
-  const unitR = towers.reduce((s, tw) => s + tw.unitR, 0) / towers.length;
-  const rScreen = unitR * t.scale;
-  const unitHeightScreen = 2 * rScreen;
-  const step = unitHeightScreen * CONFIG.STACK_UNIT_OVERLAP;
-  const halfW = (unitHeightScreen * CONFIG.STACK_CAPSULE_WIDTH) / 2;
-  const bottomLift = rScreen * 0.22;
-
-  let minSX = Infinity; let maxSX = -Infinity;
-  let topSY = Infinity; let bottomSY = -Infinity;
-  for (const tw of towers) {
-    let baseIdx = Infinity; let topIdx = -Infinity;
-    for (const m of tw.members) {
-      if (m.state !== 'idle' && m.state !== 'stacked') continue;
-      if (m.stackIdx < baseIdx) baseIdx = m.stackIdx;
-      if (m.stackIdx > topIdx) topIdx = m.stackIdx;
-    }
-    if (!isFinite(baseIdx)) continue;
-    const h = topIdx - baseIdx + 1;
-    const sxBase = tw.baseX * t.scale + t.tx;
-    const syBase = tw.baseY * t.scaleY + t.ty;
-    const colTop = syBase - bottomLift - ((h - 1) * step + unitHeightScreen);
-    if (sxBase - halfW < minSX) minSX = sxBase - halfW;
-    if (sxBase + halfW > maxSX) maxSX = sxBase + halfW;
-    if (colTop < topSY) topSY = colTop;
-    if (syBase > bottomSY) bottomSY = syBase;
-  }
-  if (!isFinite(minSX)) return null;
-  return { x: minSX, y: topSY, w: maxSX - minSX, h: bottomSY - topSY };
-}
-
-// Draw the formation capsule from its screen-aligned bbox. Called once per
-// formation from render.js. Not called mid-avalanche.
-export function drawFormationCapsule(ctx, towers, t, sw, dpr, time) {
-  const box = formationCapsuleBBox(towers, t);
-  if (!box) return;
-  const { x, y, w, h } = box;
-  const radius = Math.min(w * 0.3, h * 0.3);
-  ctx.fillStyle = `rgba(20, 12, 34, ${CONFIG.STACK_CAPSULE_ALPHA})`;
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-  ctx.lineTo(x + radius, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-  ctx.fill();
-}
-
 // A tower group as a vertical strip of upright sprites, bottom-up.
 // State branches:
 //   - idle/stacked: sits at pivot with lift, jitter, perspective, sway.
@@ -257,10 +196,9 @@ export function drawTower(ctx, tw, hole, sw, t, dpr, time) {
   // Soft ambient-occlusion capsule behind the column — subtle dark shape
   // that binds the sprites into one silhouette. Skipped during an
   // avalanche (the column is fragmenting; the capsule would trail wrong).
-  // Also skipped when the column is part of a FORMATION: the render pass
-  // draws ONE wide capsule spanning the whole formation instead, so the
-  // pyramid/skyscraper reads as a single silhouette (see render.js
-  // drawFormationCapsules).
+  // Also skipped when the column is part of a FORMATION: touching columns
+  // + unison sway already bind a pyramid/skyscraper, and any backdrop
+  // shape big enough to span one reads as a grey slab (owner feedback).
   if (!av && aliveHeight >= 2 && !tw.formationId) {
     const capsuleWidth = unitHeightScreen * CONFIG.STACK_CAPSULE_WIDTH;
     const capsuleHeight = (aliveHeight - 1) * step + unitHeightScreen;

@@ -251,10 +251,12 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   prisms (W=3-4 × H=8-14 skyscrapers, rare landmarks) at worldgen time.
   Each column is an ORDINARY stack (own stackId, own idx run, own avalanche);
   units share `formationId`/`columnIdx`/`formationKind`/`formationTotalUnits`
-  as visual + coordination bindings. Rendering: one wide AO capsule spans
-  the whole formation (drawFormationCapsule in render-sprites.js); columns
-  share a sway phase keyed on formationId so a skyscraper reads as ONE
-  building instead of a picket fence. Chain destabilization: when a
+  as visual + coordination bindings. Rendering: columns share a sway phase
+  keyed on formationId so a skyscraper reads as ONE building instead of a
+  picket fence. Formation columns draw NO AO capsule (neither per-column
+  nor formation-wide) — a backdrop big enough to span a pyramid reads as
+  a grey slab (owner feedback); touching columns + unison sway carry the
+  grouping. Lone towers keep their per-column capsule. Chain destabilization: when a
   column tips, adjacent standing columns roll `hashFormationRoll` <
   `FORMATION_CHAIN_PROB` (0.7) and schedule delayed initiateCollapse
   triggers (`FORMATION_CHAIN_DELAY_MIN..MAX`). `FORMATION_MAX_AIRBORNE`
