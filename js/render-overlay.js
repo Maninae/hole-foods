@@ -169,3 +169,24 @@ export function sizeFadeAlpha(screenR, minPx, fullPx) {
   if (screenR >= fullPx) return 1;
   return (screenR - minPx) / (fullPx - minPx);
 }
+
+// Extra SOUTH cull margin, in ground-plane world-y units, for a standing
+// column member. Columns are upright billboards: a base south of the
+// screen bottom can still have its top peeking into view, so the render
+// cull must accept bases up to the column's screen height below the edge
+// (without this, a skyscraper popped in whole the moment its base crossed
+// the edge — owner feedback). The column extends (stackH−1) overlap-steps
+// plus ~1.5 sprite radii (half-height + base lift + perspective) above the
+// base; screen-vertical px divide by scaleY, so world-y divides by ISO_Y.
+// Every member shares (x, y) and stackH, so a column passes or fails the
+// cull as one unit and drawTower always sees the full alive column.
+// Chunk visits are already covered: PAD=3 padded queries reach farther
+// south than any column is tall.
+export function columnCullExtraY(o) {
+  if (!o.stackId || o.landed) return 0;
+  if (o.state !== 'idle' && o.state !== 'stacked') return 0;
+  const stackH = o.stackH || 1;
+  const columnScreenExtent = (stackH - 1) * 2 * o.r * CONFIG.STACK_UNIT_OVERLAP
+    + 1.5 * o.r;
+  return columnScreenExtent / CONFIG.ISO_Y;
+}

@@ -131,6 +131,12 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   chunk itself.
 - **Padded queries:** objects can sit outside their owning chunk's rect;
   PAD=3 chunks (in each level's own units) always covers cluster extents.
+- **Height-aware south cull** (columnCullExtraY in render-overlay.js):
+  the render cull accepts a stack member whose base is up to its column's
+  screen height below the bottom edge, so a tall tower's top peeks into
+  view instead of popping in whole when the base crosses the edge. Every
+  minted unit carries `stackH` (full column height) for this; all members
+  share (x, y) + stackH so a column passes or fails the cull as one unit.
 - **1 world unit = 1 cm** for the HUD size label. Hole starts r=26.4 (53 cm)
   — the starter radius was sim-tuned up +20% (from 22) after owner feedback
   that L1→L3 felt gated by too many oversized nearby items.

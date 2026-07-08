@@ -28,7 +28,7 @@ import { drawHole } from './render-hole.js';
 import {
   holeScreenBBox, shouldFadeSingle, shouldFadeTower,
   advanceOverlayFade, drawHoleOverlay, OCCLUDER_ALPHA,
-  sizeFadeAlpha,
+  sizeFadeAlpha, columnCullExtraY,
 } from './render-overlay.js';
 
 export function createRenderer(canvas) {
@@ -94,8 +94,11 @@ export function renderScene(R, state) {
       const m = o.r * 1.4;
       // Tumbling units may have flown off their chunk rect — skip the rect
       // filter for them (they get culled later by the airborne loop below).
+      // The SOUTH bound stretches by the column height for stack members:
+      // a base below the screen still draws when its top peeks into view.
       if (o.state !== 'tumbling') {
-        if (o.x < x0 - m || o.x > x1 + m || o.y < y0 - m || o.y > y1 + m) continue;
+        if (o.x < x0 - m || o.x > x1 + m || o.y < y0 - m
+            || o.y > y1 + m + columnCullExtraY(o)) continue;
       }
       const isColumnMember = o.stackId && !o.landed
         && (o.state === 'idle' || o.state === 'stacked');
@@ -143,9 +146,12 @@ export function renderScene(R, state) {
   for (const av of sw.avalanches) {
     for (const u of av.units.values()) {
       if (u.phase !== 'tumbling') continue;
-      // Rough cull: skip if visibly off-screen with generous padding.
+      // Rough cull: skip if visibly off-screen with generous padding. The
+      // south bound stretches by the airborne height (same reasoning as
+      // standing columns: the lifted sprite peeks above the bottom edge).
       const m = av.unitR * 3;
-      if (u.x < x0 - m || u.x > x1 + m || u.y < y0 - m || u.y > y1 + m) continue;
+      if (u.x < x0 - m || u.x > x1 + m || u.y < y0 - m
+          || u.y > y1 + m + u.z / CONFIG.ISO_Y) continue;
       visible.push({ type: 'tumbling', y: u.y, u, av });
     }
   }

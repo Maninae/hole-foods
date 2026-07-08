@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { CONFIG } from '../../js/config.js';
 import {
   sizeFadeAlpha,
+  columnCullExtraY,
   bboxIntersect,
   holeScreenBBox,
   singleScreenBBox,
@@ -25,6 +26,33 @@ import {
 function idTransform() {
   return { scale: 1, scaleY: CONFIG.ISO_Y, tx: 0, ty: 0 };
 }
+
+// --- Height-aware south culling ------------------------------------------
+// A column whose base is south of the screen bottom must still render when
+// its top peeks into view: the cull's south bound extends by the column's
+// screen height converted to ground-plane world-y (owner-reported pop-in:
+// skyscrapers appeared all at once mid-view when the base crossed the edge).
+
+test('columnCullExtraY: stack member extends south cull by its column screen height', () => {
+  const member = { stackId: 's', stackIdx: 3, stackH: 14, r: 10, state: 'stacked' };
+  const expected = ((14 - 1) * 2 * 10 * CONFIG.STACK_UNIT_OVERLAP + 1.5 * 10) / CONFIG.ISO_Y;
+  assert.ok(Math.abs(columnCullExtraY(member) - expected) < 1e-9);
+});
+
+test('columnCullExtraY: plain singles and landed units get no extra margin', () => {
+  assert.equal(columnCullExtraY({ r: 10, state: 'idle' }), 0);
+  assert.equal(columnCullExtraY(
+    { stackId: 's', stackIdx: 2, stackH: 14, r: 10, state: 'idle', landed: true },
+  ), 0);
+  assert.equal(columnCullExtraY(
+    { stackId: 's', stackIdx: 2, stackH: 14, r: 10, state: 'tumbling' },
+  ), 0);
+});
+
+test('columnCullExtraY: legacy member without stackH still gets sprite-height margin', () => {
+  const legacy = { stackId: 's', stackIdx: 0, r: 10, state: 'idle' };
+  assert.ok(columnCullExtraY(legacy) >= 1.5 * 10 / CONFIG.ISO_Y - 1e-9);
+});
 
 test('bboxIntersect: overlapping rects report true', () => {
   const a = { x0: 0, y0: 0, x1: 10, y1: 10 };

@@ -118,6 +118,23 @@ test('within a tower, units share (x, y) and radius; stackIdx increases from 0',
   }
 });
 
+test('every minted tower unit carries stackH = full column height', () => {
+  // stackH feeds the renderer's height-aware south cull (a column whose
+  // base is below the screen must still draw when its top peeks in), so
+  // every unit — base and siblings, lone towers and formation columns —
+  // must know how tall its column is.
+  const w = createWorld('twr-stackh');
+  ensureChunksAround(w, 0, 0, 3000, 3000);
+  const groups = towersIn(w);
+  assert.ok(groups.size > 0, 'need at least one tower');
+  for (const list of groups.values()) {
+    for (const o of list) {
+      assert.equal(o.stackH, list.length,
+        `unit ${o.stackId}#${o.stackIdx} stackH=${o.stackH}, column height ${list.length}`);
+    }
+  }
+});
+
 test('only the base of a fresh tower is idle; the rest are stacked', () => {
   const w = createWorld('twr-state');
   ensureChunksAround(w, 0, 0, 3000, 3000);

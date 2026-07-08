@@ -83,6 +83,9 @@ export function spawnStackFromBase(chunk, base, startIdx, height) {
   const stackId = `${ck}:s${base.idx}`;
   base.stackId = stackId;
   base.stackIdx = 0;
+  // Full column height on every unit: the renderer's height-aware south
+  // cull needs it without walking siblings (see columnCullExtraY).
+  base.stackH = height;
   chunk.objects.push(base);
   let idx = startIdx;
   for (let k = 1; k < height; k++) {
@@ -95,7 +98,7 @@ export function spawnStackFromBase(chunk, base, startIdx, height) {
       points: base.points,
       state: 'stacked',
       vx: 0, vy: 0,
-      stackId, stackIdx: k,
+      stackId, stackIdx: k, stackH: height,
     });
     idx++;
   }
