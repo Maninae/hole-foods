@@ -354,3 +354,109 @@ test('mobile (iPhone 13): boots clean, no horizontal overflow, play starts', asy
   assert.deepEqual(errs, [], `page errors:\n${errs.join('\n')}`);
   await ctx.close();
 });
+
+test('mobile: virtual joystick shows in play, steers the hole, hides on pause', async () => {
+  const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+  const page = await ctx.newPage();
+  await page.goto(URL);
+  await page.waitForLoadState('networkidle');
+
+  // Start screen: joystick is hidden even on a touch device.
+  assert.ok(await page.evaluate(
+    () => document.getElementById('joystick').classList.contains('hidden'),
+  ), 'joystick should be hidden on the start screen');
+
+  await page.tap('#btn-play');
+  await page.waitForTimeout(150);
+
+  assert.ok(!(await page.evaluate(
+    () => document.getElementById('joystick').classList.contains('hidden'),
+  )), 'joystick should be visible during play on a touch device');
+
+  // Grab ring geometry, drag knob to the right rim, hold. Use pointer events
+  // (touch pointer type) since Playwright's touchscreen API is tap-only and
+  // we need a sustained drag on the knob element.
+  const geom = await page.evaluate(() => {
+    const ring = document.querySelector('#joystick .joystick-ring');
+    const r = ring.getBoundingClientRect();
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, r: r.width / 2 };
+  });
+  const startX = await page.evaluate(() => window.__game.hole.x);
+  const targetX = geom.cx + geom.r * 0.95;
+
+  // Drive the knob with pointer events. hasTouch context means Chromium
+  // treats these as touch pointers; the joystick's pointerdown/move path
+  // is what a real finger would trigger.
+  await page.evaluate(async ([cx, cy, tx]) => {
+    const el = document.getElementById('joystick');
+    const send = (type, x, y) => el.dispatchEvent(new PointerEvent(type, {
+      pointerId: 1, pointerType: 'touch', isPrimary: true,
+      clientX: x, clientY: y, bubbles: true, cancelable: true, button: 0,
+    }));
+    send('pointerdown', cx, cy);
+    for (let i = 1; i <= 8; i++) {
+      const x = cx + (tx - cx) * (i / 8);
+      send('pointermove', x, cy);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    // Hold at the right rim so the hole picks up sustained velocity.
+    for (let i = 0; i < 12; i++) {
+      send('pointermove', tx, cy);
+      await new Promise((r) => setTimeout(r, 60));
+    }
+  }, [geom.cx, geom.cy, targetX]);
+
+  const held = await page.evaluate(() => ({
+    x: window.__game.hole.x,
+    vx: window.__game.hole.vx,
+    active: document.getElementById('joystick').classList.contains('joystick-active'),
+  }));
+  assert.ok(held.active, 'joystick should read as active while a finger is on the knob');
+  assert.ok(held.vx > 30, `expected rightward velocity, got vx=${held.vx}`);
+  assert.ok(held.x - startX > 5, `hole should have moved right: ${held.x} vs ${startX}`);
+
+  // Release: knob snaps home, active class drops. Whether the hole comes to
+  // a full stop depends on ease/friction, so we only assert the joystick
+  // gave up its grip (steering vector goes zero).
+  await page.evaluate(() => {
+    const el = document.getElementById('joystick');
+    el.dispatchEvent(new PointerEvent('pointerup', {
+      pointerId: 1, pointerType: 'touch', isPrimary: true,
+      clientX: 0, clientY: 0, bubbles: true, cancelable: true, button: 0,
+    }));
+  });
+  await page.waitForTimeout(100);
+  assert.ok(!(await page.evaluate(
+    () => document.getElementById('joystick').classList.contains('joystick-active'),
+  )), 'joystick should not be active after release');
+
+  // Pause via keyboard: joystick hides.
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(80);
+  assert.ok(await page.evaluate(
+    () => document.getElementById('joystick').classList.contains('hidden'),
+  ), 'joystick should hide when the game pauses');
+
+  await ctx.close();
+});
+
+test('desktop: virtual joystick stays hidden (no coarse pointer, no touch)', async () => {
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(URL);
+  await page.waitForLoadState('networkidle');
+  await page.click('#btn-play');
+  await page.waitForTimeout(150);
+
+  // The joystick must never appear on a desktop pointer:fine viewport.
+  const shown = await page.evaluate(() => {
+    const j = document.getElementById('joystick');
+    if (!j) return false;
+    if (j.classList.contains('hidden')) return false;
+    const cs = getComputedStyle(j);
+    return cs.visibility !== 'hidden' && cs.display !== 'none';
+  });
+  assert.ok(!shown, 'joystick should not be visible on a desktop viewport');
+
+  await page.close();
+});
