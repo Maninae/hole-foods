@@ -216,10 +216,15 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
   LOCAL bounces (zeroed horizontal on bounce), then settles as an ordinary
   'idle' ground object at a **deterministic target** on a sunflower spiral
   (angle_j = j × 137.5° with hashed jitter, r_j = spacing × √j; hashed by
-  stackId + stackIdx). Horizontal velocity is DERIVED from the target: at
-  detach we solve the ballistic z-arc for flight time T, then set
-  `vx = (tx − x) / T`, `vy = (ty − y) / T`, so the hop LANDS on the
-  target. Settle is a no-op on x/y (the unit is already there), which is
+  stackId + stackIdx). Units detach with **vz = 0** — a pure drop from
+  their RENDERED stacked height (`detachDropZ`: step/ISO_Y per row above
+  the effective base, plus a continuity floor for the lowest unit). Never
+  reintroduce an upward launch impulse: it read as the tower "sprouting"
+  from its top (owner feedback). Horizontal velocity is DERIVED from the
+  target: we solve the ballistic z-arc for flight time T, then set
+  `vx = (tx − x) / T`, `vy = (ty − y) / T`, so the fall LANDS on the
+  target (with sub-frame touchdown interpolation in stepUnit so the
+  landing never overruns it). Settle is a no-op on x/y (the unit is already there), which is
   what makes the collapse read as a real crumble instead of a fling
   followed by a snap. Airborne units
   live in a new `'tumbling'` state that rim physics ignores, and the

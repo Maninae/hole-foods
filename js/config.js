@@ -125,12 +125,9 @@ export const CONFIG = {
                                        // anim end, matching the base's descent into the pit
   STACK_AVAL_GRAVITY: 4800,        // z-gravity in world-units / s². Heavy on purpose: collapses
                                    // should drop fast and become eatable quickly (owner feedback:
-                                   // no floaty launches, no waiting out bounces).
-  STACK_AVAL_LAUNCH_VZ: 90,       // initial upward velocity of a detaching unit (world-units / s).
-                                   // Sets the flight time via the ballistic z-arc; vx/vy are then
-                                   // derived so the hop ARRIVES at the spiral target.
-  STACK_AVAL_LAUNCH_VZ_PER_IDX: 18, // extra initial vz per idx up the column (top-of-column units
-                                    // arc higher, so their peak is more visible mid-air).
+                                   // no floaty launches, no waiting out bounces). Units detach
+                                   // with vz = 0 — a pure drop from their stacked height; any
+                                   // upward impulse reads as the tower sprouting from its top.
   STACK_AVAL_SPIN_RATE_DEG: 540,   // max spin rate (deg/s), signed random per unit
   STACK_AVAL_BOUNCE_VZ: -0.25,      // vz multiplier on landing (elastic-ish)
   STACK_AVAL_BOUNCE_SPIN: 0.7,     // spin multiplier on bounce

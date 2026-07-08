@@ -12,6 +12,7 @@ import { createHole } from '../../js/hole.js';
 import { pointsFor } from '../../js/catalog.js';
 import { createSwallow, swallowUpdate } from '../../js/swallow.js';
 import { groupStacks, aliveInStack, currentBaseOf } from '../../js/stacks.js';
+import { detachDropZ } from '../../js/collapse.js';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -252,6 +253,57 @@ test('avalanche: detaches are bottom-up with monotonic stagger', () => {
       `detach order broken: idx ${curr.stackIdx} at ${curr.detachAt} < idx ${prev.stackIdx} at ${prev.detachAt}`);
     assert.ok(curr.detachAt - prev.detachAt >= CONFIG.STACK_AVAL_STAGGER * 0.5,
       `stagger too small between idx ${prev.stackIdx} and ${curr.stackIdx}`);
+  }
+});
+
+test('avalanche: units tumble DOWN from their rendered column height, never launch up', () => {
+  const H = 14;
+  const { world, hole, sw } = makeStackFixture(H);
+  hole.x = -10; hole.y = 0;
+  swallowUpdate(sw, 1 / 60, 0, world, hole);
+  assert.equal(sw.avalanches?.length, 1, 'expected one active avalanche');
+  const av = sw.avalanches[0];
+  const firstZ = new Map(); // stackIdx -> z one frame into flight
+  const firstVz = new Map();
+  const peakZ = new Map();
+  const dt = 1 / 60;
+  let t = dt;
+  for (let i = 0; i < 60 * 8 && sw.avalanches.length > 0; i++) {
+    swallowUpdate(sw, dt, t, world, hole);
+    t += dt;
+    for (const u of av.units.values()) {
+      if (u.phase !== 'tumbling') continue;
+      if (!firstZ.has(u.stackIdx)) {
+        firstZ.set(u.stackIdx, u.z);
+        firstVz.set(u.stackIdx, u.vz);
+      }
+      peakZ.set(u.stackIdx, Math.max(peakZ.get(u.stackIdx) ?? -Infinity, u.z));
+    }
+  }
+  assert.equal(firstZ.size, H - 1, 'every stacked unit must pass through tumbling');
+  // Two frames of free fall is the observation slack (detach and this
+  // check don't share a frame boundary).
+  const slack = CONFIG.STACK_AVAL_GRAVITY * (2 * dt) * (2 * dt);
+  for (const u of av.units.values()) {
+    const s = u.stackIdx;
+    const targetDist = Math.hypot(u.tx - av.baseX, u.ty - av.baseY);
+    const expected = detachDropZ(av.unitR, s, targetDist, av.physicsScale);
+    const z1 = firstZ.get(s);
+    assert.ok(z1 <= expected + 1e-6,
+      `unit ${s} detached ABOVE its stacked height: z=${z1.toFixed(1)} > ${expected.toFixed(1)}`);
+    assert.ok(z1 >= expected - slack,
+      `unit ${s} detached far below its stacked height: z=${z1.toFixed(1)} < ${expected.toFixed(1)}`);
+    assert.ok(firstVz.get(s) <= 0,
+      `unit ${s} has UPWARD velocity at detach: vz=${firstVz.get(s).toFixed(1)}`);
+    assert.ok(peakZ.get(s) <= expected + 1e-6,
+      `unit ${s} rose above its detach height mid-flight: peak=${peakZ.get(s).toFixed(1)}`);
+    // The rendered-height contract itself: above the continuity floor, the
+    // drop starts one overlap-step per row above the effective base.
+    const stepZ = (2 * av.unitR * CONFIG.STACK_UNIT_OVERLAP) / CONFIG.ISO_Y;
+    if (s >= 3) {
+      assert.ok(Math.abs(expected - (s - 1) * stepZ) < 1e-6,
+        `unit ${s} drop height is not its rendered column height`);
+    }
   }
 });
 

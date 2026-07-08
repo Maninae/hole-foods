@@ -409,31 +409,38 @@ function drainChainQueue(sw, world, hole, dt) {
 function stepUnit(av, u, dt) {
   u.flightT += dt;
   u.vz -= CONFIG.STACK_AVAL_GRAVITY * av.physicsScale * dt;
-  u.x += u.vx * dt;
-  u.y += u.vy * dt;
-  u.z += u.vz * dt;
   u.rot += u.spin * dt;
-  let newlyLanded = false;
-  if (u.z <= 0 && u.vz < 0) {
+  const zNext = u.z + u.vz * dt;
+  if (zNext <= 0 && u.vz < 0) {
+    // Sub-frame touchdown: advance the ground position only up to where
+    // the arc crosses z=0, not a full frame past it. vx is sized to reach
+    // the target at the exact ballistic flight time; a full-frame overrun
+    // (vx · dt) visibly overshoots the spiral target and can breach the
+    // 2×chunkSize landing cap on the fastest drops.
+    const f = u.z > 0 ? Math.min(1, u.z / (u.z - zNext)) : 0;
+    u.x += u.vx * dt * f;
+    u.y += u.vy * dt * f;
+    u.z = 0;
     if (u.bounces < CONFIG.STACK_AVAL_MAX_BOUNCES
         && Math.abs(u.vz) > CONFIG.STACK_AVAL_MIN_VZ_SETTLE * av.physicsScale
         && u.flightT < CONFIG.STACK_AVAL_MAX_FLIGHT) {
       u.bounces++;
-      u.z = 0;
       u.vz *= CONFIG.STACK_AVAL_BOUNCE_VZ;
       // Zero horizontal on bounce so the unit hops IN PLACE at its target.
       // (The pre-bounce vx/vy already delivered it there.) This is the
       // "local decaying hop" the owner asked for.
       u.vx = 0; u.vy = 0;
       u.spin *= CONFIG.STACK_AVAL_BOUNCE_SPIN;
-      newlyLanded = true;
-    } else {
-      settleUnit(av, u);
+      return true;
     }
-  } else if (u.flightT >= CONFIG.STACK_AVAL_MAX_FLIGHT) {
     settleUnit(av, u);
+    return false;
   }
-  return newlyLanded;
+  u.x += u.vx * dt;
+  u.y += u.vy * dt;
+  u.z = zNext;
+  if (u.flightT >= CONFIG.STACK_AVAL_MAX_FLIGHT) settleUnit(av, u);
+  return false;
 }
 
 // Settle: hand the chunk object back to the idle pool at its current x/y.
@@ -474,31 +481,59 @@ function flightTime(z0, vz, gravity) {
   return (vz + Math.sqrt(disc)) / gravity;
 }
 
+// Ground-speed continuity budget for a tumbling unit: under ~half its own
+// diameter per rendered frame (at the 60fps reference), the same bar the
+// settle-teleport guard tests assert. Units whose natural drop is too
+// short to cover their target distance within this budget get a deepened
+// drop instead of a faster slide.
+const CONTINUITY_MAX_DIA_PER_FRAME = 0.45;
+const CONTINUITY_FPS = 60;
+
+// Drop height for a detaching unit. Pure — the tumble test asserts the
+// sim against this same contract.
+//
+// Base height is the unit's RENDERED stacked position: the renderer stacks
+// units at STACK_UNIT_OVERLAP of a unit's height per row and projects
+// airborne z through t.scaleY (the ISO squash), so the world-z matching
+// the on-screen column is step/ISO_Y per row above the effective base
+// (idx 1 sits at ground level once the base has tipped into the pit).
+// Floored at half a unit so the lowest unit still gets a visible drop.
+//
+// Continuity floor: vx = targetDist / flightTime, so a near-zero drop
+// would slide the bottom unit faster than the per-frame budget. When the
+// natural drop is that short, deepen it so the flight lasts long enough —
+// in practice only idx 1 of a tall column ever hits this.
+export function detachDropZ(unitR, stackIdx, targetDist, physicsScale) {
+  const gravity = CONFIG.STACK_AVAL_GRAVITY * physicsScale;
+  const stepZ = (2 * unitR * CONFIG.STACK_UNIT_OVERLAP) / CONFIG.ISO_Y;
+  let z0 = Math.max(unitR * 0.5, (stackIdx - 1) * stepZ);
+  const maxGroundSpeed = 2 * unitR * CONTINUITY_MAX_DIA_PER_FRAME * CONTINUITY_FPS;
+  const minFlightT = targetDist / maxGroundSpeed;
+  const dropT = Math.sqrt((2 * z0) / gravity);
+  if (dropT < minFlightT) z0 = 0.5 * gravity * minFlightT * minFlightT;
+  return z0;
+}
+
 function detachUnit(av, u) {
   const s = u.stackIdx;
   const stackId = av.stackId;
-  // Position at detach: on-column, at this unit's stacked height.
   u.x = av.baseX;
   u.y = av.baseY;
-  u.z = s * 2 * av.unitR;
+  const targetDist = Math.hypot(u.tx - av.baseX, u.ty - av.baseY);
+  u.z = detachDropZ(av.unitR, s, targetDist, av.physicsScale);
 
-  // Vertical impulse: hashed per-unit boost so top-of-column units arc
-  // higher (their z0 is already tall; extra vz makes them peak higher).
-  // vz and gravity both scale linearly with av.physicsScale, which keeps
-  // the flight time invariant across cycles and slots (see initiateCollapse
-  // for the derivation). Without the scale, tall cycle-2+ towers would
-  // fly for >>MAX_FLIGHT and hit the settle epsilon slide as a visible
-  // teleport.
-  const vzBoost = 1 + 0.3 * hash01(stackId, s, 0xf00d);
-  u.vz = (CONFIG.STACK_AVAL_LAUNCH_VZ + s * CONFIG.STACK_AVAL_LAUNCH_VZ_PER_IDX)
-       * vzBoost * av.physicsScale;
+  // No launch impulse: units TUMBLE DOWN from where they stood. An upward
+  // vz read as the tower "sprouting" from its top (owner feedback). Flight
+  // time comes purely from the drop height; z0 scales with unitR and
+  // gravity with physicsScale, so flight time stays invariant across
+  // cycles and slots — a cycle-2+ tower must never exceed MAX_FLIGHT and
+  // hit the settle epsilon slide as a visible teleport.
+  u.vz = 0;
 
-  // Horizontal velocity is now DERIVED, not sampled. Aim the parabolic
-  // hop AT the deterministic spiral target so the unit lands where it is
-  // supposed to settle. This is the fix for the owner's two symptoms:
-  // no more "flings super far" (vx is bounded by targetDist / T) and no
-  // more "teleports back" (there's nothing to snap to).
-  const T = flightTime(u.z, u.vz, CONFIG.STACK_AVAL_GRAVITY * av.physicsScale);
+  // Horizontal velocity is DERIVED, not sampled. Aim the falling arc AT
+  // the deterministic spiral target so the unit lands where it settles:
+  // no fling (vx is bounded by targetDist / T), no snap at the end.
+  const T = flightTime(u.z, 0, CONFIG.STACK_AVAL_GRAVITY * av.physicsScale);
   u.vx = (u.tx - u.x) / T;
   u.vy = (u.ty - u.y) / T;
 
