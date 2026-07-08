@@ -87,8 +87,12 @@ export function updateFx(fx, dt) {
 }
 
 // Parts + rings live on the ground plane: draw under the renderer's squashed
-// transform so arcs become ellipses for free.
-export function drawFxWorld(ctx, fx) {
+// transform so arcs become ellipses for free. `zoom` (t.scale) lets the
+// large stroked rings normalize to local CSS px — big world radii pushed
+// through the CTM as raw path geometry facet under the rasterizer's float32
+// curve flattening (same fix as drawHole). Filled dots stay in world space:
+// they are a few device px, where flattening is invisible.
+export function drawFxWorld(ctx, fx, zoom) {
   for (const p of fx.parts) {
     const k = 1 - p.t / p.life;
     ctx.globalAlpha = k;
@@ -102,12 +106,16 @@ export function drawFxWorld(ctx, fx) {
   for (const g of fx.rings) {
     const k = g.t / g.life;
     const r = g.r0 + (g.r1 - g.r0) * (1 - Math.pow(1 - k, 2.2));
+    ctx.save();
+    ctx.translate(g.x, g.y);
+    ctx.scale(1 / zoom, 1 / zoom);
     ctx.globalAlpha = (1 - k) * 0.85;
     ctx.strokeStyle = `hsl(${g.hue} 80% 70%)`;
-    ctx.lineWidth = g.width * (1 - k * 0.6);
+    ctx.lineWidth = g.width * (1 - k * 0.6) * zoom;
     ctx.beginPath();
-    ctx.arc(g.x, g.y, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, r * zoom, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
   }
   ctx.globalAlpha = 1;
 }

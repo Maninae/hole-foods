@@ -174,6 +174,14 @@ export function drawLevelFxGround(ctx, fx, tr, w, h) {
     const rScreen = c.r * tr.scale;
     const { core, glow } = c.aura;
 
+    // Local-px normalization: draw at the celebration center with one local
+    // unit = one CSS px (y stays ISO-squashed). Deep-cycle radii pushed
+    // through the CTM as raw path geometry facet under the rasterizer's
+    // float32 flattening — same fix as drawHole in render-hole.js.
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.scale(1 / tr.scale, 1 / tr.scale);
+
     // Expanding aura flash: bounded in screen space so it doesn't paint the
     // entire viewport at deep zoom-out (big holes). Inner tone = core, outer
     // = glow — the palette climbs the Super-Saiyan ladder as levels rise.
@@ -184,8 +192,7 @@ export function drawLevelFxGround(ctx, fx, tr, w, h) {
         viewMin * 0.5,
       );
       const rrScreen = flashScreen * (0.28 + 0.72 * Math.pow(1 - glowK, 0.55));
-      const rrWorld = rrScreen / tr.scale;
-      const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rrWorld);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rrScreen);
       g.addColorStop(0, rgba(core, 0.85 * glowK));
       g.addColorStop(0.28, rgba(glow, 0.55 * glowK));
       g.addColorStop(0.65, rgba(glow, 0.25 * glowK));
@@ -194,7 +201,7 @@ export function drawLevelFxGround(ctx, fx, tr, w, h) {
       ctx.globalCompositeOperation = 'lighter';
       ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(c.x, c.y, rrWorld, 0, Math.PI * 2);
+      ctx.arc(0, 0, rrScreen, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalCompositeOperation = prevOp;
     }
@@ -210,19 +217,17 @@ export function drawLevelFxGround(ctx, fx, tr, w, h) {
       if (rt < 0 || rt >= ring.life) continue;
       const rk = rt / ring.life;
       const rrScreen = r0Screen + (r1Screen - r0Screen) * (1 - Math.pow(1 - rk, 2.4));
-      const rrWorld = rrScreen / tr.scale;
       // Fade from glow -> core as the ring ages (rich edge, bright brink).
       const ringRgb = lerpRgb(glow, core, rk);
       ctx.globalAlpha = (1 - rk) * 0.9;
       ctx.strokeStyle = rgba(ringRgb, 1);
-      // Stroke width lives in world units under the squashed transform;
-      // divide by scale so the line stays at a stable ~4-6 CSS-px thickness.
-      ctx.lineWidth = Math.max(viewMin * 0.006 * (1 - rk * 0.5), 1.2) / tr.scale;
+      ctx.lineWidth = Math.max(viewMin * 0.006 * (1 - rk * 0.5), 1.2);
       ctx.beginPath();
-      ctx.arc(c.x, c.y, rrWorld, 0, Math.PI * 2);
+      ctx.arc(0, 0, rrScreen, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.restore();
   }
 }
 

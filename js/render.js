@@ -195,16 +195,22 @@ export function renderScene(R, state) {
     if (target.r <= fitLimit || target.r >= fitLimit * 1.45) continue;
     const d = Math.hypot(target.x - hole.x, target.y - hole.y);
     if (d >= hole.r * 3.2 + target.r) continue;
+    // Local-px normalization: big world radii through the CTM facet under
+    // the rasterizer's float32 flattening (same fix as drawHole).
+    ctx.save();
+    ctx.translate(target.x, target.y);
+    ctx.scale(1 / t.scale, 1 / t.scale);
     ctx.globalAlpha = 0.28 + 0.18 * Math.sin(time * 5);
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(1.5, target.r * 0.06);
+    ctx.lineWidth = Math.max(1.5, target.r * 0.06 * t.scale);
     ctx.beginPath();
-    ctx.arc(target.x, target.y, target.r * 1.12, 0, Math.PI * 2);
+    ctx.arc(0, 0, target.r * 1.12 * t.scale, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
   }
   ctx.globalAlpha = 1;
 
-  drawFxWorld(ctx, fx);
+  drawFxWorld(ctx, fx, t.scale);
 
   // Level-up ground effects: expanding gold glow + staggered ring pulses.
   // Drawn last on the ground plane so they read over decals/tease rings.
