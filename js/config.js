@@ -163,4 +163,14 @@ export const CONFIG = {
   DECAL_ALPHA: 0.28,               // ground-flavor decals: quiet texture, never mistaken for
                                    // an eatable item (owner feedback)   // alpha multiplier for a sprite/tower covering the hole
   OVERLAY_FADE_S: 0.15,   // seconds to fade the always-visible rim overlay in/out
+
+  // --- Virtual joystick (js/joystick.js) ---
+  // Corner-anchored translucent joystick shown on touch devices during play.
+  // Sizes are in CSS pixels; the DOM styles read these via custom properties.
+  JOYSTICK_RING_PX: 120,           // outer ring diameter (110-130 range per owner)
+  JOYSTICK_KNOB_FRAC: 0.42,        // knob diameter as a fraction of the ring
+  JOYSTICK_MARGIN_PX: 22,          // padding from the screen corner (on top of safe-area insets)
+  JOYSTICK_DEADZONE_FRAC: 0.14,    // center dead zone as a fraction of the ring radius
+  JOYSTICK_OPACITY_IDLE: 0.55,     // ring alpha while idle — unobtrusive over any biome ground
+  JOYSTICK_OPACITY_ACTIVE: 0.85,   // ring alpha while a finger is dragging the knob
 };
