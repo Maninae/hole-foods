@@ -12,7 +12,7 @@ const BANNER_GAP_MS = 220;           // gap between queued unlocks
 function el(id) { return document.getElementById(id); }
 
 // Render the sticker grid and refresh the progression map from the current
-// progress. Called on every open — cheap enough (~18 stickers, ~25 nodes).
+// progress. Called on every open — cheap enough (~26 stickers, ~29 nodes).
 function paint(refs, progress, map) {
   const grid = refs.stickerGrid;
   grid.textContent = '';

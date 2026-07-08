@@ -312,7 +312,7 @@ js/main.js           bootstrap, rAF loop, event wiring ONLY — no game rules
 ## Testing
 
 ```
-npm test           # 202 unit tests (node --test tests/unit/*.test.js)
+npm test           # 209 unit tests (node --test tests/unit/*.test.js)
 npm run test:e2e   # 11 Playwright tests: real steering → swallow → growth,
                    # pause/mute/best persistence, Cmd+Tab stuck-key,
                    # collection overlay (Escape + P capture), HUD map

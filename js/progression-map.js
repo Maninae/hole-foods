@@ -14,6 +14,7 @@
 // browser-native (overflow: auto) so mobile touch drag "just works".
 
 import { ACHIEVEMENTS } from './achievements-table.js';
+import { THEMES } from './catalog.js';
 
 const NODE_SIZE = 54;    // circle diameter (matches the ≥44px tap-target rule)
 const COL_W = 130;       // horizontal spacing between tiers
@@ -83,7 +84,7 @@ function shortLabel(node) {
     'eat-10000': '10k',     'eat-100000': '100k',
     'combo-x2': '×2',       'combo-x3': '×3',
     'combo-x4': '×4',       'combo-x5': '×5',
-    'themes-3': '3 biomes', 'themes-9': '9 biomes',   'all-themes': 'All 18',
+    'themes-3': '3 biomes', 'themes-9': '9 biomes',   'all-themes': `All ${THEMES.length}`,
     'full-cycle': 'Cycle I','cycle-2': 'Cycle II',
     'cycle-3': 'Cycle III', 'cycle-5': 'Cycle V',
     'meadow-c1': 'Meadow II', 'meadow-c2': 'Meadow III', 'meadow-6c': 'Meadow ×6',

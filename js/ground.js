@@ -115,7 +115,7 @@ function ensureBuffer() {
 
 // One subtle 64px polka-dot tile per (theme, level), tiled in world space —
 // the pattern scale follows the chunk level so texture reads at every zoom.
-// Cached lazily: any of the 18 themes is a valid key here.
+// Cached lazily: any theme key in the catalog is a valid key here.
 const tiles = new Map();
 function tileFor(themeKey, level) {
   const key = `${themeKey}@${level}`;
