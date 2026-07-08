@@ -6,6 +6,13 @@
 // cycle (slot = band % BANDS_PER_CYCLE). This way any theme can appear at
 // any slot: pace at slot 0, cathedrals at slot 5, from the same raw table.
 //
+// RING-SCOPED POOL: every theme carries a `debutBand`. A theme only becomes
+// eligible once the player reaches a band >= its debut, so early rings show
+// a smaller variety than the full pool and later rings feel like a payoff.
+// The classic six themes debut at band 0 so the spawn ring plays as always.
+// Once a theme debuts, it stays eligible for every deeper band, so cycle-
+// recurrence achievements (themeCycle, themeCycleCount) remain earnable.
+//
 // `up: true` = never rotate (buildings, trees, standing figures).
 // `stack: true` = eligible to spawn as a vertical tower (see stacks.js /
 // world.js). Only items with base r in ~7-25 are marked — the base unit
@@ -19,12 +26,13 @@ import { CONFIG } from './config.js';
 // item ladder is still edible when a hole reaches slot k.
 export const SLOT_MULTS = [1, 1.55, 2.4, 3.72, 5.77, 8.95];
 
-// The 18-theme pool. First six are the classic biomes in original order —
+// The 26-theme pool. First six are the classic biomes in original order —
 // cycle 0's rotation must land on them, and BIOMES stays exported as an
-// alias for anything that used to import a 6-item array.
+// alias for anything that used to import a 6-item array. `debutBand` gates
+// when each theme first becomes eligible (see RING-SCOPED POOL above).
 export const THEMES = [
   {
-    key: 'meadow', name: 'Berry Meadow',
+    key: 'meadow', name: 'Berry Meadow', debutBand: 0,
     ground: '#9fd483', groundAlt: '#93c977', decals: ['🌼', '🌿', '🦋'],
     items: [
       { e: '🫐', r: 7,  w: 10,  hue: 230 },
@@ -44,7 +52,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'orchard', name: 'Orchard Grove',
+    key: 'orchard', name: 'Orchard Grove', debutBand: 0,
     ground: '#6fb35f', groundAlt: '#66a857', decals: ['🍂', '🌱', '🍄'],
     items: [
       { e: '🌰', r: 8,  w: 10,  hue: 25 },
@@ -62,7 +70,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'bakery', name: 'Sugar Bakery',
+    key: 'bakery', name: 'Sugar Bakery', debutBand: 0,
     ground: '#f4cdbd', groundAlt: '#efc2b0', decals: ['✨', '🫧'],
     items: [
       { e: '🍬', r: 8,  w: 10,  hue: 320 },
@@ -82,7 +90,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'toybox', name: 'Toybox Town',
+    key: 'toybox', name: 'Toybox Town', debutBand: 0,
     ground: '#c9b4ea', groundAlt: '#bfa8e3', decals: ['⭐', '🎵'],
     items: [
       { e: '🎲', r: 8,  w: 10,  hue: 0 },
@@ -101,7 +109,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'funfair', name: 'Funfair Boardwalk',
+    key: 'funfair', name: 'Funfair Boardwalk', debutBand: 0,
     ground: '#8fd0c6', groundAlt: '#83c6bb', decals: ['🎊', '✨'],
     items: [
       { e: '🍦', r: 8,  w: 10,  hue: 40 },
@@ -120,7 +128,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'downtown', name: 'Downtown',
+    key: 'downtown', name: 'Downtown', debutBand: 0,
     ground: '#b9c0cc', groundAlt: '#aeb6c4', decals: ['🐦', '🍂'],
     items: [
       { e: '🛵', r: 8,  w: 10,  hue: 355 },
@@ -140,7 +148,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'haunt', name: 'Halloween Haunt',
+    key: 'haunt', name: 'Halloween Haunt', debutBand: 4,
     ground: '#a3663a', groundAlt: '#95593a', decals: ['🕸️', '🍂', '🌙'],
     items: [
       { e: '🍬', r: 7,  w: 10,  hue: 25 },
@@ -158,7 +166,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'ocean', name: 'Ocean Depths',
+    key: 'ocean', name: 'Ocean Depths', debutBand: 6,
     ground: '#3a7ca5', groundAlt: '#326a95', decals: ['🫧', '💧', '🐚'],
     items: [
       { e: '🐚', r: 8,  w: 10,  hue: 45 },
@@ -177,7 +185,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'savanna', name: 'Safari Savanna',
+    key: 'savanna', name: 'Safari Savanna', debutBand: 4,
     ground: '#c9a066', groundAlt: '#bd9560', decals: ['🌾', '🌿', '🪨'],
     items: [
       { e: '🐁', r: 7,  w: 10,  hue: 25 },
@@ -196,7 +204,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'cosmos', name: 'Cosmic Void',
+    key: 'cosmos', name: 'Cosmic Void', debutBand: 12,
     // Deep indigo, not black: the hole pit and dark object silhouettes
     // still need contrast against the ground.
     ground: '#3d3670', groundAlt: '#332c62', decals: ['✨', '⭐', '🌠'],
@@ -216,7 +224,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'academy', name: 'Chalkboard Academy',
+    key: 'academy', name: 'Chalkboard Academy', debutBand: 10,
     ground: '#3f6b4f', groundAlt: '#366145', decals: ['✏️', '📎', '⭐'],
     items: [
       { e: '✏️', r: 7,  w: 10,  hue: 48 },
@@ -235,7 +243,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'winter', name: 'Winter Wonderland',
+    key: 'winter', name: 'Winter Wonderland', debutBand: 8,
     ground: '#cfe4ee', groundAlt: '#c1d9e5', decals: ['❄️', '✨', '🌲'],
     items: [
       { e: '❄️', r: 7,  w: 10,  hue: 200 },
@@ -254,7 +262,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'sakura', name: 'Sakura Garden',
+    key: 'sakura', name: 'Sakura Garden', debutBand: 2,
     ground: '#f5cfd8', groundAlt: '#eebfcc', decals: ['🌸', '💮', '🍃'],
     items: [
       { e: '🌸', r: 7,  w: 10,  hue: 330 },
@@ -273,7 +281,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'musichall', name: 'Music Hall',
+    key: 'musichall', name: 'Music Hall', debutBand: 8,
     ground: '#7d3c4a', groundAlt: '#703440', decals: ['🎵', '🎶', '✨'],
     items: [
       { e: '🎵', r: 7,  w: 10,  hue: 0 },
@@ -293,7 +301,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'farm', name: 'Farm Country',
+    key: 'farm', name: 'Farm Country', debutBand: 2,
     ground: '#d4b370', groundAlt: '#c9a765', decals: ['🌾', '🌱', '🍂'],
     items: [
       { e: '🥚', r: 7,  w: 10,  hue: 40 },
@@ -312,7 +320,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'jungle', name: 'Jungle Ruins',
+    key: 'jungle', name: 'Jungle Ruins', debutBand: 6,
     ground: '#4a7845', groundAlt: '#416b3d', decals: ['🍃', '🌿', '🦋'],
     items: [
       { e: '🦋', r: 7,  w: 10,  hue: 280 },
@@ -331,7 +339,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'desert', name: 'Desert Bazaar',
+    key: 'desert', name: 'Desert Bazaar', debutBand: 10,
     ground: '#d9b380', groundAlt: '#cea675', decals: ['🌵', '🪨', '🌰'],
     items: [
       { e: '🌰', r: 7,  w: 10,  hue: 25 },
@@ -350,7 +358,7 @@ export const THEMES = [
     ],
   },
   {
-    key: 'factory', name: 'Robot Factory',
+    key: 'factory', name: 'Robot Factory', debutBand: 12,
     ground: '#7a8590', groundAlt: '#6f7a86', decals: ['⚙️', '🔩', '⚡'],
     items: [
       { e: '🔩', r: 7,  w: 10,  hue: 210 },
@@ -366,6 +374,161 @@ export const THEMES = [
       { e: '🛰️', r: 40, w: 2.5, hue: 210 },
       { e: '🏗️', r: 48, w: 2,   hue: 45,  up: true },
       { e: '🏭', r: 60, w: 1,   hue: 210, up: true },
+    ],
+  },
+  // --- NEW themes (append to keep classic order stable). Each debuts at a
+  //     mid- or late-game band so the player keeps discovering fresh
+  //     content as they push outward.
+  {
+    key: 'gumdrop', name: 'Gumdrop Grove', debutBand: 6,
+    ground: '#f7c4dd', groundAlt: '#efb5d1', decals: ['🍬', '✨', '🎀'],
+    items: [
+      { e: '🍬', r: 7,  w: 10,  hue: 320 },
+      { e: '🎀', r: 9,  w: 9,   hue: 340 },
+      { e: '🍡', r: 11, w: 8,   hue: 330 },
+      { e: '🧃', r: 13, w: 7,   hue: 340 },
+      { e: '🍧', r: 15, w: 7,   hue: 200 },
+      { e: '🍨', r: 18, w: 6,   hue: 25 },
+      { e: '🍢', r: 22, w: 5,   hue: 25 },
+      { e: '🎁', r: 26, w: 5,   hue: 340 },
+      { e: '🍮', r: 30, w: 4,   hue: 40 },
+      { e: '🍦', r: 36, w: 3,   hue: 40 },
+      { e: '🧴', r: 42, w: 2,   hue: 335 },
+      { e: '🎪', r: 54, w: 1.5, hue: 320, up: true },
+      { e: '🏬', r: 60, w: 0.8, hue: 335, up: true },
+    ],
+  },
+  {
+    key: 'paddy', name: 'Rice Paddy', debutBand: 8,
+    ground: '#a4c58a', groundAlt: '#99bc7f', decals: ['🌾', '🐸', '💧'],
+    items: [
+      { e: '🌱', r: 7,  w: 10,  hue: 100 },
+      { e: '🍚', r: 9,  w: 9,   hue: 0 },
+      { e: '🍙', r: 11, w: 8,   hue: 0 },
+      { e: '🥢', r: 13, w: 8,   hue: 25 },
+      { e: '🐸', r: 15, w: 7,   hue: 100 },
+      { e: '🌾', r: 18, w: 7,   hue: 45 },
+      { e: '🍥', r: 22, w: 6,   hue: 340 },
+      { e: '🍜', r: 26, w: 5,   hue: 30 },
+      { e: '🐮', r: 30, w: 4,   hue: 25 },
+      { e: '🐃', r: 36, w: 3,   hue: 25 },
+      { e: '🌾', r: 42, w: 2,   hue: 45 },
+      { e: '🛖', r: 52, w: 1.5, hue: 25,  up: true },
+      { e: '⛩️', r: 60, w: 0.8, hue: 0,   up: true },
+    ],
+  },
+  {
+    key: 'volcano', name: 'Volcano Vale', debutBand: 10,
+    ground: '#7a3e2a', groundAlt: '#6c3625', decals: ['🔥', '🪨', '💨'],
+    items: [
+      { e: '🪨', r: 7,  w: 10,  hue: 0 },
+      { e: '🔥', r: 9,  w: 9,   hue: 25 },
+      { e: '🥩', r: 11, w: 8,   hue: 0 },
+      { e: '🦎', r: 13, w: 7,   hue: 15 },
+      { e: '🌶️', r: 15, w: 7,   hue: 0 },
+      { e: '💨', r: 18, w: 6,   hue: 0 },
+      { e: '🐢', r: 22, w: 5,   hue: 100 },
+      { e: '🦖', r: 26, w: 5,   hue: 100 },
+      { e: '🦕', r: 32, w: 4,   hue: 100 },
+      { e: '🪵', r: 38, w: 3,   hue: 25 },
+      { e: '🏝️', r: 46, w: 2,   hue: 100, up: true },
+      { e: '🌋', r: 54, w: 1.2, hue: 15,  up: true },
+      { e: '🗻', r: 60, w: 0.7, hue: 15,  up: true },
+    ],
+  },
+  {
+    key: 'reef', name: 'Coral Reef', debutBand: 10,
+    ground: '#4dbfc4', groundAlt: '#42b0b6', decals: ['🐚', '🫧', '🪸'],
+    items: [
+      { e: '🐟', r: 7,  w: 10,  hue: 200 },
+      { e: '🐡', r: 9,  w: 9,   hue: 48 },
+      { e: '🫧', r: 11, w: 8,   hue: 200 },
+      { e: '🪸', r: 13, w: 8,   hue: 340 },
+      { e: '🐠', r: 15, w: 7,   hue: 45 },
+      { e: '🐢', r: 18, w: 6,   hue: 100 },
+      { e: '🦑', r: 22, w: 5,   hue: 340 },
+      { e: '🐬', r: 26, w: 5,   hue: 210 },
+      { e: '🦭', r: 32, w: 4,   hue: 210 },
+      { e: '🐳', r: 40, w: 3,   hue: 210 },
+      { e: '🐋', r: 48, w: 2,   hue: 220 },
+      { e: '🚢', r: 56, w: 1.2, hue: 210, up: true },
+      { e: '🗿', r: 60, w: 0.7, hue: 0,   up: true },
+    ],
+  },
+  {
+    key: 'aurora', name: 'Aurora Reach', debutBand: 12,
+    ground: '#3f5a7a', groundAlt: '#375072', decals: ['❄️', '✨', '🌌'],
+    items: [
+      { e: '❄️', r: 7,  w: 10,  hue: 200 },
+      { e: '✨', r: 9,  w: 9,   hue: 200 },
+      { e: '🌟', r: 11, w: 8,   hue: 48 },
+      { e: '🐺', r: 14, w: 7,   hue: 210 },
+      { e: '🐻‍❄️', r: 16, w: 7,   hue: 200 },
+      { e: '🦌', r: 20, w: 6,   hue: 25 },
+      { e: '🏹', r: 24, w: 5,   hue: 25 },
+      { e: '⛺', r: 28, w: 5,   hue: 25,  up: true },
+      { e: '🌲', r: 34, w: 4,   hue: 150, up: true },
+      { e: '🛖', r: 40, w: 3,   hue: 25,  up: true },
+      { e: '🏔️', r: 48, w: 2,   hue: 200, up: true },
+      { e: '🌌', r: 56, w: 1.2, hue: 280, up: true },
+      { e: '🗻', r: 60, w: 0.7, hue: 200, up: true },
+    ],
+  },
+  {
+    key: 'clouds', name: 'Cloud Terrace', debutBand: 15,
+    ground: '#e2ecff', groundAlt: '#d4e0f5', decals: ['☁️', '✨', '🕊️'],
+    items: [
+      { e: '☁️', r: 7,  w: 10,  hue: 200 },
+      { e: '💨', r: 9,  w: 9,   hue: 200 },
+      { e: '🕊️', r: 11, w: 8,   hue: 0 },
+      { e: '🪶', r: 13, w: 7,   hue: 45 },
+      { e: '🎈', r: 15, w: 7,   hue: 340 },
+      { e: '🌈', r: 20, w: 6,   hue: 200 },
+      { e: '🦢', r: 24, w: 5,   hue: 0 },
+      { e: '🪁', r: 26, w: 5,   hue: 200 },
+      { e: '🎐', r: 30, w: 4,   hue: 200 },
+      { e: '🎪', r: 36, w: 3,   hue: 200, up: true },
+      { e: '🏰', r: 46, w: 2,   hue: 200, up: true },
+      { e: '🏯', r: 54, w: 1.2, hue: 340, up: true },
+      { e: '🌇', r: 60, w: 0.7, hue: 25,  up: true },
+    ],
+  },
+  {
+    key: 'dragon', name: 'Dragon Peak', debutBand: 15,
+    ground: '#5a3d4a', groundAlt: '#503541', decals: ['🔥', '⚔️', '🐲'],
+    items: [
+      { e: '💎', r: 7,  w: 10,  hue: 200 },
+      { e: '⚔️', r: 9,  w: 9,   hue: 25 },
+      { e: '🗝️', r: 11, w: 8,   hue: 45 },
+      { e: '🛡️', r: 13, w: 8,   hue: 210 },
+      { e: '👑', r: 15, w: 7,   hue: 48 },
+      { e: '🏹', r: 18, w: 6,   hue: 25 },
+      { e: '🐲', r: 22, w: 5,   hue: 100 },
+      { e: '⚗️', r: 26, w: 5,   hue: 280 },
+      { e: '📿', r: 30, w: 4,   hue: 25 },
+      { e: '🐉', r: 38, w: 3,   hue: 100 },
+      { e: '🗡️', r: 44, w: 2.5, hue: 25 },
+      { e: '🏰', r: 54, w: 1.5, hue: 340, up: true },
+      { e: '🏛️', r: 60, w: 0.8, hue: 45,  up: true },
+    ],
+  },
+  {
+    key: 'neon', name: 'Neon Metropolis', debutBand: 15,
+    ground: '#241a3d', groundAlt: '#1e1533', decals: ['🌃', '✨', '📱'],
+    items: [
+      { e: '📱', r: 7,  w: 10,  hue: 200 },
+      { e: '🕶️', r: 9,  w: 9,   hue: 0 },
+      { e: '🎮', r: 11, w: 8,   hue: 340 },
+      { e: '💾', r: 13, w: 7,   hue: 210 },
+      { e: '🍜', r: 15, w: 7,   hue: 25 },
+      { e: '🏮', r: 18, w: 6,   hue: 0 },
+      { e: '📺', r: 22, w: 5,   hue: 210 },
+      { e: '🛼', r: 26, w: 5,   hue: 340 },
+      { e: '🚲', r: 30, w: 4,   hue: 200 },
+      { e: '🏍️', r: 34, w: 4,   hue: 340 },
+      { e: '🚁', r: 42, w: 2.5, hue: 210 },
+      { e: '🌃', r: 54, w: 1.5, hue: 280, up: true },
+      { e: '🏙️', r: 60, w: 0.8, hue: 280, up: true },
     ],
   },
 ];
@@ -493,14 +656,28 @@ export function sectorForAngle(band, angle) {
   return Math.floor(a * n) % n;
 }
 
+// The set of themes eligible at a given band. A theme becomes eligible the
+// first time the player reaches a band >= its `debutBand` and stays
+// eligible for every deeper band (monotonic). Band 0's pool is the six
+// classic themes even though themeFor short-circuits to meadow — every
+// other consumer (world seeding, achievements, tests) should still see the
+// full band-0 pool. Pure function of band; not cached because THEMES is
+// small and the filter is cheap.
+export function poolForBand(band) {
+  return THEMES.filter((t) => t.debutBand <= band);
+}
+
 // Theme lookup by cell coordinates. Band 0 → meadow (spawn is home).
-// Otherwise pick via cellHash mod THEMES.length. Sector is normalized so
-// callers don't have to mod it themselves.
+// Otherwise pick via cellHash mod poolForBand(band).length. Sector is
+// normalized so callers don't have to mod it themselves. The pool grows
+// as the player pushes outward, so early rings show a smaller variety
+// than the full pool and later rings feel like a payoff.
 export function themeFor(band, sector) {
   if (band <= 0) return THEMES[0];
   const n = sectorCount(band);
   const s = ((sector % n) + n) % n;
-  return THEMES[cellHash(band, s) % THEMES.length];
+  const pool = poolForBand(band);
+  return pool[cellHash(band, s) % pool.length];
 }
 
 // Primary theme-lookup API for anything that has a world position — used
